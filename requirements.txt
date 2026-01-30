@@ -5,8 +5,5 @@ numpy
 
 opencv-python-headless==4.9.0.80
 
-torch==2.1.0+cpu
-torchvision==0.16.0+cpu
-
 ultralytics
 python-multipart
