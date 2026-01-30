@@ -12,6 +12,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/ingest", tags=["ingest"])
 
+print("🚨 INGEST ROUTER MODULE LOADED 🚨", flush=True)
+
 
 @router.post("/frame")
 async def ingest_frame(
