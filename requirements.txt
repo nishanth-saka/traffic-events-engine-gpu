@@ -7,7 +7,3 @@ opencv-python-headless==4.9.0.80
 torch
 ultralytics
 python-multipart
-
-opencv-python==0.0.0
-opencv-contrib-python==0.0.0
-#prevents packages from installing.
