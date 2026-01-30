@@ -2,7 +2,6 @@
 
 import logging
 
-from app.state import app_state
 from app.ingest.frame.vehicle import detect_vehicles
 from app.ingest.frame.plate_proposal import propose_plate_regions
 from app.ingest.frame.quality_gate import evaluate_plate_quality
@@ -12,12 +11,18 @@ from app.ingest.frame.events import emit_event
 logger = logging.getLogger(__name__)
 
 
-def process_frame(*, camera_id: str, frame_ts: float, frame):
+def process_frame(
+    *,
+    camera_id: str,
+    frame_ts: float,
+    frame,
+    frame_store,   # 👈 injected dependency
+):
     """
     Background-executed frame processing pipeline.
 
     IMPORTANT:
-    - Registers frame in the global FrameStore (app_state.frames)
+    - Registers frame in the provided FrameStore
     - Emits domain events only
     """
 
@@ -28,9 +33,9 @@ def process_frame(*, camera_id: str, frame_ts: float, frame):
     )
 
     # -------------------------------------------------
-    # 🔑 CRITICAL FIX: register frame globally
+    # Register frame (NO global state access)
     # -------------------------------------------------
-    app_state.frames.update(
+    frame_store.update(
         camera_id=camera_id,
         frame=frame,
         ts=frame_ts,
