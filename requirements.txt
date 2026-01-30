@@ -8,3 +8,4 @@ ultralytics
 
 #req files for additional functionalities
 # For database support
+# For database support
