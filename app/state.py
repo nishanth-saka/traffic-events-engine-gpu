@@ -1,16 +1,15 @@
 # app/state.py
 
 from app.detection.detection_manager import DetectionManager
-from app.frames.base import FrameStore  # or whatever you already use
-# other existing imports stay as-is
+from app.ingest.frame.pipeline import frame_store
 
 
 class AppState:
     def __init__(self):
-        # existing state objects
-        self.frames = FrameStore()
+        # Concrete frame provider (headless)
+        self.frames = frame_store
 
-        # ✅ ADD THIS LINE
+        # Detection metrics + accuracy logging
         self.detection_manager = DetectionManager()
 
 
