@@ -1,11 +1,9 @@
 [build]
 builder = "nixpacks"
 
-[variables]
-PYTHON_VERSION = "3.11"
-
 [phases.install]
 cmds = [
-  "pip install --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.txt",
+  "pip install --extra-index-url https://download.pytorch.org/whl/cpu torch==2.1.0+cpu torchvision==0.16.0+cpu",
+  "pip install -r requirements.txt",
   "pip uninstall -y opencv-python opencv-contrib-python || true"
 ]
