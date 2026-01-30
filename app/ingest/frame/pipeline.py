@@ -1,5 +1,8 @@
+# app/ingest/frame/pipeline.py
+
 import logging
 
+from app.state import app_state
 from app.ingest.frame.vehicle import detect_vehicles
 from app.ingest.frame.plate_proposal import propose_plate_regions
 from app.ingest.frame.quality_gate import evaluate_plate_quality
@@ -12,13 +15,25 @@ logger = logging.getLogger(__name__)
 def process_frame(*, camera_id: str, frame_ts: float, frame):
     """
     Background-executed frame processing pipeline.
-    Emits events only.
+
+    IMPORTANT:
+    - Registers frame in the global FrameStore (app_state.frames)
+    - Emits domain events only
     """
 
     logger.info(
         "[PIPELINE] process_frame started | camera_id=%s ts=%s",
         camera_id,
         frame_ts,
+    )
+
+    # -------------------------------------------------
+    # 🔑 CRITICAL FIX: register frame globally
+    # -------------------------------------------------
+    app_state.frames.update(
+        camera_id=camera_id,
+        frame=frame,
+        ts=frame_ts,
     )
 
     # -----------------------------
@@ -86,9 +101,3 @@ def process_frame(*, camera_id: str, frame_ts: float, frame):
                 plate=ocr,
                 vehicle=vehicle,
             )
-# app/ingest/frame/pipeline.py
-
-from app.frames.snapshot import SnapshotFrameStore
-
-# Single shared frame store for the app
-frame_store = SnapshotFrameStore()

@@ -1,18 +1,7 @@
-curl -X POST "https://traffic-events-engine-production.up.railway.app/ingest/frame" \
-  -F "camera_id=test_cam_1" \
-  -F "image=@/Users/strangerd/Desktop/SAMPLE.png"
+curl -X POST \
+  -F "camera_id=cam_1" \
+  -F "image=@/Users/strangerd/Desktop/random.png" \
+  https://traffic-events-engine-production.up.railway.app/ingest/frame
 
+  curl https://traffic-events-engine-production.up.railway.app/debug/pipeline
 
-  curl -X POST "https://traffic-events-engine-production.up.railway.app/ingest/frame" \
-  -F "camera_id=test_cam_2" \
-  -F "image=@/Users/strangerd/Desktop/random.png"
-
-  curl -X POST https://traffic-events-engine-production.up.railway.app/ingest/frame \
-  -F "camera_id=det_test" \
-  -F "image=@/Users/strangerd/Desktop/random.png"
-
-app/detection/detector.py
-app/detection/models.py
-app/detection/detection_manager.py
-app/events/engine.py
-engine.py
