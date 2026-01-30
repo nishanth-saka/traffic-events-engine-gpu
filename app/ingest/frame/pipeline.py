@@ -33,7 +33,7 @@ def process_frame(
     )
 
     # -------------------------------------------------
-    # Register frame (NO global state access)
+    # Register frame
     # -------------------------------------------------
     frame_store.update(
         camera_id=camera_id,
