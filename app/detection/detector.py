@@ -4,8 +4,6 @@ import time
 import logging
 import threading
 
-from app.config import ROI
-
 logger = logging.getLogger(__name__)
 
 
@@ -16,7 +14,7 @@ class DetectorWorker(threading.Thread):
     - Reads latest frame
     - Runs detection
     - Emits structured metadata
-    - Logs accuracy metrics
+    - Logs latency metrics
     """
 
     def __init__(
@@ -38,6 +36,7 @@ class DetectorWorker(threading.Thread):
         self.last_run = 0.0
         self.running = True
 
+        # 🛡 Error backoff
         self.last_error_time = 0.0
         self.error_backoff_sec = 5.0
 
@@ -60,10 +59,8 @@ class DetectorWorker(threading.Thread):
 
                 start = time.time()
 
-                detections = self.detector_fn(
-                    frame,
-                    roi=ROI,
-                )
+                # 🔒 Phase-4: detector is frame-only (no ROI here)
+                detections = self.detector_fn(frame)
 
                 latency_ms = (time.time() - start) * 1000.0
 
@@ -82,7 +79,7 @@ class DetectorWorker(threading.Thread):
                     latency_ms=latency_ms,
                 )
 
-            except Exception as e:
+            except Exception:
                 if time.time() - self.last_error_time > self.error_backoff_sec:
                     logger.exception(
                         "[DetectorWorker][%s] detection error", self.cam_id
