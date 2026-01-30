@@ -44,6 +44,17 @@ class DetectorWorker(threading.Thread):
         self.last_error_time = 0.0
         self.error_cooldown = 5.0
 
+        # 🔍 One-time dependency sanity log (safe)
+        try:
+            import numpy as np
+            import torch
+            logger.info(
+                f"[DetectorWorker] NumPy={np.__version__}, Torch={torch.__version__}"
+            )
+        except Exception as e:
+            logger.exception("[DetectorWorker] Dependency import failed", exc_info=e)
+            raise
+
     def run(self):
         logger.info(f"[DetectorWorker] Started for camera {self.cam_id}")
 
@@ -68,7 +79,7 @@ class DetectorWorker(threading.Thread):
                 detections = self.detector_fn(frame)
 
                 # Optional ROI filtering
-                if ROI:
+                if ROI is not None:
                     detections = self._filter_by_roi(detections)
 
                 # Store metadata only
@@ -93,9 +104,9 @@ class DetectorWorker(threading.Thread):
     # -------------------------------------------------
     def _filter_by_roi(self, detections):
         """
-        detections: list of dicts with 'cx', 'cy' or bbox center
+        detections: list of dicts with 'cx', 'cy' (bbox center)
         """
-        if not ROI:
+        if ROI is None:
             return detections
 
         x1, y1, x2, y2 = ROI
