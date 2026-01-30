@@ -86,3 +86,9 @@ def process_frame(*, camera_id: str, frame_ts: float, frame):
                 plate=ocr,
                 vehicle=vehicle,
             )
+# app/ingest/frame/pipeline.py
+
+from app.frames.snapshot import SnapshotFrameStore
+
+# Single shared frame store for the app
+frame_store = SnapshotFrameStore()
