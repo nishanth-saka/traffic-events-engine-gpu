@@ -11,14 +11,12 @@ logger = logging.getLogger(__name__)
 
 class DetectorWorker(threading.Thread):
     """
-    FPS-controlled detection worker.
+    Headless detection worker.
 
-    Responsibilities:
-    - Pull ONLY latest MAIN frame (overwrite-only)
-    - Drop frames by design
-    - Run detector function (YOLO)
-    - Apply ROI filtering
-    - Store metadata ONLY (no frames)
+    - Reads latest frame
+    - Runs detection
+    - Emits structured metadata
+    - Logs accuracy metrics
     """
 
     def __init__(
@@ -40,86 +38,53 @@ class DetectorWorker(threading.Thread):
         self.last_run = 0.0
         self.running = True
 
-        # Error backoff
         self.last_error_time = 0.0
-        self.error_cooldown = 5.0
-
-        # 🔍 One-time dependency sanity log (safe)
-        try:
-            import numpy as np
-            import torch
-            logger.info(
-                f"[DetectorWorker] NumPy={np.__version__}, Torch={torch.__version__}"
-            )
-        except Exception as e:
-            logger.exception("[DetectorWorker] Dependency import failed", exc_info=e)
-            raise
+        self.error_backoff_sec = 5.0
 
     def run(self):
-        logger.info(f"[DetectorWorker] Started for camera {self.cam_id}")
+        logger.info("[DetectorWorker] Started for %s", self.cam_id)
 
         while self.running:
             now = time.time()
 
-            # FPS throttle
             if now - self.last_run < self.interval:
-                time.sleep(0.01)
+                time.sleep(0.005)
                 continue
 
             self.last_run = now
 
             try:
-                # 🔒 Phase-4 invariant: MAIN frames only
-                frame = self.camera_manager.get_main_frame(self.cam_id)
-
+                frame = self.camera_manager.get_latest_frame(self.cam_id)
                 if frame is None:
                     continue
 
-                # Run detector (YOLO)
-                detections = self.detector_fn(frame)
+                start = time.time()
 
-                # Optional ROI filtering
-                if ROI is not None:
-                    detections = self._filter_by_roi(detections)
-
-                # Store metadata only
-                self.detection_manager.update(self.cam_id, detections)
-
-            except Exception as e:
-                logger.exception(
-                    f"[DetectorWorker] Error for camera {self.cam_id}: {e}"
+                detections = self.detector_fn(
+                    frame,
+                    roi=ROI,
                 )
 
-                # Backoff on repeated failures
-                if time.time() - self.last_error_time < self.error_cooldown:
-                    time.sleep(self.error_cooldown)
+                latency_ms = (time.time() - start) * 1000.0
 
-                self.last_error_time = time.time()
+                # Normalize detection format
+                normalized = []
+                for d in detections:
+                    normalized.append({
+                        "class": d["class"],
+                        "confidence": float(d["confidence"]),
+                        "bbox": d["bbox"],
+                    })
 
-    def stop(self):
-        self.running = False
+                self.detection_manager.update(
+                    self.cam_id,
+                    normalized,
+                    latency_ms=latency_ms,
+                )
 
-    # -------------------------------------------------
-    # ROI filtering
-    # -------------------------------------------------
-    def _filter_by_roi(self, detections):
-        """
-        detections: list of dicts with 'cx', 'cy' (bbox center)
-        """
-        if ROI is None:
-            return detections
-
-        x1, y1, x2, y2 = ROI
-        filtered = []
-
-        for d in detections:
-            cx = d.get("cx")
-            cy = d.get("cy")
-
-            if cx is None or cy is None:
-                continue
-
-            if x1 <= cx <= x2 and y1 <= cy <= y2:
-                filtered.append(d)
-
-        return filtered
+            except Exception as e:
+                if time.time() - self.last_error_time > self.error_backoff_sec:
+                    logger.exception(
+                        "[DetectorWorker][%s] detection error", self.cam_id
+                    )
+                    self.last_error_time = time.time()
