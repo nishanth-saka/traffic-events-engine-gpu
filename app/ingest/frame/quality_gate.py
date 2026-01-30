@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 from dataclasses import dataclass
 
+logging.getLogger(__name__).info("cv2 loaded from: %s", cv2.__file__)
 
 @dataclass
 class GateResult:
