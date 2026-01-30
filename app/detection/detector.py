@@ -11,10 +11,9 @@ class DetectorWorker(threading.Thread):
     """
     Headless detection worker.
 
-    - Reads latest frame
-    - Runs detection
-    - Emits structured metadata
-    - Logs latency metrics
+    - Pulls latest frame
+    - Runs detector
+    - Stores normalized detections
     """
 
     def __init__(
@@ -36,7 +35,6 @@ class DetectorWorker(threading.Thread):
         self.last_run = 0.0
         self.running = True
 
-        # 🛡 Error backoff
         self.last_error_time = 0.0
         self.error_backoff_sec = 5.0
 
@@ -57,14 +55,23 @@ class DetectorWorker(threading.Thread):
                 if frame is None:
                     continue
 
+                logger.info(
+                    "[TRACE][%s] Frame received shape=%s",
+                    self.cam_id,
+                    getattr(frame, "shape", None),
+                )
+
                 start = time.time()
-
-                # 🔒 Phase-4: detector is frame-only (no ROI here)
                 detections = self.detector_fn(frame)
-
                 latency_ms = (time.time() - start) * 1000.0
 
-                # Normalize detection format
+                logger.info(
+                    "[TRACE][%s] Detector produced %d detections (%.1f ms)",
+                    self.cam_id,
+                    len(detections),
+                    latency_ms,
+                )
+
                 normalized = []
                 for d in detections:
                     normalized.append({
@@ -82,6 +89,7 @@ class DetectorWorker(threading.Thread):
             except Exception:
                 if time.time() - self.last_error_time > self.error_backoff_sec:
                     logger.exception(
-                        "[DetectorWorker][%s] detection error", self.cam_id
+                        "[DetectorWorker][%s] detection error",
+                        self.cam_id,
                     )
                     self.last_error_time = time.time()
