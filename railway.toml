@@ -1,0 +1,8 @@
+[build]
+builder = "nixpacks"
+
+[phases.install]
+cmds = [
+  "pip uninstall -y opencv-python opencv-contrib-python || true",
+  "pip install -r requirements.txt"
+]
