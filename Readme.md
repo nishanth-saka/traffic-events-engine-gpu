@@ -11,3 +11,8 @@ curl -X POST "https://traffic-events-engine-production.up.railway.app/ingest/fra
   -F "camera_id=det_test" \
   -F "image=@/Users/strangerd/Desktop/random.png"
 
+app/detection/detector.py
+app/detection/models.py
+app/detection/detection_manager.py
+app/events/engine.py
+engine.py
