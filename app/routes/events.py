@@ -1,3 +1,5 @@
+# app/routes/events.py
+
 from fastapi import APIRouter
 from app.events.store import EVENT_STORE
 
