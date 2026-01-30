@@ -9,27 +9,22 @@ from app.ingest.frame.pipeline import process_frame
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/ingest", tags=["ingest"])
+router = APIRouter(
+    prefix="/ingest/frame",
+    tags=["frame-ingest"],
+)
 
-print("🚨 INGEST ROUTER MODULE LOADED 🚨", flush=True)
+MAX_INFLIGHT = 8
+_inflight = 0
 
-
-@router.post("/frame")
+@router.post("")
 async def ingest_frame(
     camera_id: str = Form(...),
     frame_ts: float | None = Form(None),
     image: UploadFile = File(...),
 ):
-    """
-    Stateless frame ingestion endpoint.
-
-    - Accepts a single image
-    - Schedules pipeline via asyncio.create_task (Railway-safe)
-    - Returns immediately
-    """
-
     import cv2
-    
+
     if image.content_type not in ("image/jpeg", "image/png"):
         raise HTTPException(status_code=415, detail="Unsupported image type")
 
@@ -42,17 +37,27 @@ async def ingest_frame(
 
     ts = frame_ts or time.time()
 
-    # 🔥 GUARANTEED execution (Railway-safe)
-    asyncio.create_task(
-        asyncio.to_thread(
-            process_frame,
-            camera_id=camera_id,
-            frame_ts=ts,
-            frame=frame,
-        )
-    )
+    global _inflight
+    if _inflight >= MAX_INFLIGHT:
+        raise HTTPException(status_code=429, detail="Too many frames in flight")
 
-    print("📥 FRAME ACCEPTED", camera_id)
+    _inflight += 1
+
+    async def _run():
+        global _inflight
+        try:
+            await asyncio.to_thread(
+                process_frame,
+                camera_id=camera_id,
+                frame_ts=ts,
+                frame=frame,
+            )
+        finally:
+            _inflight -= 1
+
+    asyncio.create_task(_run())
+
+    logger.info("Frame accepted: %s", camera_id)
 
     return {
         "status": "accepted",
