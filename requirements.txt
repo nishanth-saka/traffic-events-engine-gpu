@@ -5,3 +5,6 @@ numpy
 opencv-python-headless
 torch
 ultralytics
+
+#req files for additional functionalities
+# For database support
