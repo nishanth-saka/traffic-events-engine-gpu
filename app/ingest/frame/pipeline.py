@@ -11,9 +11,15 @@ logger = logging.getLogger(__name__)
 
 def process_frame(*, camera_id: str, frame_ts: float, frame):
     """
-    Pure function-style pipeline.
-    No side effects except event emission.
+    Background-executed frame processing pipeline.
+    Emits events only.
     """
+
+    logger.info(
+        "[PIPELINE] process_frame started | camera_id=%s ts=%s",
+        camera_id,
+        frame_ts,
+    )
 
     # -----------------------------
     # Vehicle detection
@@ -26,9 +32,7 @@ def process_frame(*, camera_id: str, frame_ts: float, frame):
             camera_id=camera_id,
             ts=frame_ts,
         )
-        return {"stage": "no_vehicle"}
-
-    results = []
+        return
 
     for vehicle in vehicles:
         vehicle_crop = vehicle["crop"]
@@ -76,19 +80,9 @@ def process_frame(*, camera_id: str, frame_ts: float, frame):
                 )
                 continue
 
-            # -----------------------------
-            # Success
-            # -----------------------------
             emit_event(
                 "plate.ocr.success",
                 camera_id=camera_id,
                 plate=ocr,
                 vehicle=vehicle,
             )
-
-            results.append(ocr)
-
-    return {
-        "stage": "done",
-        "plates": results,
-    }
