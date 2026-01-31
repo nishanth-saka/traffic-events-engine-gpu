@@ -95,7 +95,7 @@ def startup():
     # -------------------------------
     # Initialize FrameHub (REQUIRED)
     # -------------------------------
-    from app.cameras.frame_hub import FrameHub
+    from app.frames.frame_hub import FrameHub  # ✅ FIXED PATH
 
     app_state.frame_hub = FrameHub()
 
