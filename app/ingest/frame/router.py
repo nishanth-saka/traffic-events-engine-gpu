@@ -7,7 +7,6 @@ import numpy as np
 
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 
-from app.state import app_state
 from app.ingest.frame.pipeline import process_frame
 
 logger = logging.getLogger(__name__)
@@ -28,6 +27,7 @@ async def ingest_frame(
     image: UploadFile = File(...),
 ):
     import cv2  # lazy import
+    from app.state import app_state  # Lazy import to resolve circular dependency
 
     if image.content_type not in ("image/jpeg", "image/png"):
         raise HTTPException(status_code=415, detail="Unsupported image type")
