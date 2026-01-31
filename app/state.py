@@ -2,6 +2,7 @@
 
 import time
 import logging
+import cv2
 
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
@@ -13,7 +14,7 @@ router = APIRouter(prefix="/preview", tags=["preview"])
 
 @router.get("/stream/{cam_id}")
 def mjpeg_preview(cam_id: str):
-    from app.state import app_state  # Lazy import to resolve circular dependency
+    from app.shared import app_state  # Updated import to use app.shared
 
     frame_hub = app_state.frame_hub
 

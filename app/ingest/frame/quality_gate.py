@@ -1,6 +1,7 @@
 import numpy as np
 import logging
 from dataclasses import dataclass
+import cv2
 
 logging.getLogger(__name__).info("cv2 loaded from: %s", cv2.__file__)
 

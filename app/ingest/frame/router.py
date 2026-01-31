@@ -4,6 +4,7 @@ import time
 import asyncio
 import logging
 import numpy as np
+import cv2  # lazy import
 
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 
@@ -27,8 +28,6 @@ async def ingest_frame(
     frame_ts: float | None = Form(None),
     image: UploadFile = File(...),
 ):
-    # Temporarily removed cv2 import for testing
-
     if image.content_type not in ("image/jpeg", "image/png"):
         raise HTTPException(status_code=415, detail="Unsupported image type")
 
