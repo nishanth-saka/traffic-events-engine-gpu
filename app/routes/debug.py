@@ -3,6 +3,7 @@
 import time
 from fastapi import APIRouter
 from app.events.store import EVENT_STORE
+from app.shared import app_state  # Updated import to use shared module
 
 router = APIRouter(prefix="/debug", tags=["debug"])
 
@@ -13,7 +14,6 @@ def debug_pipeline():
     Read-only pipeline introspection.
     No side effects.
     """
-    from app.state import app_state  # Lazy import to resolve circular dependency
 
     frames = app_state.frames
     detection_manager = app_state.detection_manager

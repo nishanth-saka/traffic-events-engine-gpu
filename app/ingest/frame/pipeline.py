@@ -6,13 +6,12 @@ from app.ingest.frame.plate_proposal import propose_plate_regions
 from app.ingest.frame.quality_gate import evaluate_plate_quality
 from app.ingest.frame.ocr import run_ocr
 from app.ingest.frame.events import emit_event
+from app.shared import app_state  # Updated import to use shared module
 
 logger = logging.getLogger(__name__)
 
 
 def process_frame(*, camera_id: str, frame_ts: float, frame, frame_store):
-    from app.state import app_state  # Lazy import to resolve circular dependency
-
     vehicles = detect_vehicles(frame)
 
     # Use frame_store if needed (example usage below)
