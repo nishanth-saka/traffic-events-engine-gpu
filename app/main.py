@@ -6,6 +6,10 @@ from fastapi import FastAPI
 from app.config import CAMERAS
 from app.state import app_state
 
+import app.config as config
+print("CONFIG FILE:", config.__file__)
+print("CONFIG ATTRS:", dir(config))
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
