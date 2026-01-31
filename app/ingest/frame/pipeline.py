@@ -62,6 +62,17 @@ def process_frame(
             continue
 
         plate_candidates = propose_plate_regions(vehicle_crop)
+        logger.warning(
+            "[DEBUG] cam=%s plate_candidates=%d",
+            camera_id,
+            len(plate_candidates),
+        )
+        
+        for plate in plate_candidates:
+            logger.warning(
+                "[DEBUG] plate keys = %s",
+                list(plate.keys()),
+            )
 
         if not plate_candidates:
             emit_event(
