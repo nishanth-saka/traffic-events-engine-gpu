@@ -30,6 +30,9 @@ class FrameHub:
             logger.debug(f"[FrameHub] Updating frame for {cam_id}")
             self._frames[cam_id] = frame
 
+    # -------------------------------------------------
+    # Read path
+    # -------------------------------------------------
     def latest(self, cam_id: str):
         lock = self._locks.get(cam_id)
         if not lock:
@@ -37,3 +40,7 @@ class FrameHub:
         with lock:
             logger.debug(f"[FrameHub] Retrieving latest frame for {cam_id}")
             return self._frames.get(cam_id)
+
+    # 🔹 Compatibility alias (DetectionWorker expects this)
+    def get_latest(self, cam_id: str):
+        return self.latest(cam_id)
