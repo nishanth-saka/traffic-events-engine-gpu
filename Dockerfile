@@ -32,6 +32,7 @@ RUN pip install --no-cache-dir --upgrade pip \
 # Copy app code AFTER deps
 COPY . .
 
-CMD ["python", "-m", "app.main"]
+CMD sh -c "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"
+
 
 # cache-bust-2026-01-31T13:40
