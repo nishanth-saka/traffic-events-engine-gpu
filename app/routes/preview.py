@@ -27,7 +27,7 @@ def mjpeg_preview(cam_id: str):
         logger.warning("[MJPEG] generator started for %s", cam_id)
 
         while True:
-            frame = frame_hub.get_latest_frame(cam_id)
+            frame = frame_hub.latest(cam_id)
 
             if frame is None:
                 time.sleep(0.05)

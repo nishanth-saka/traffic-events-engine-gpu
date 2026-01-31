@@ -30,4 +30,4 @@ class RTSPLauncher:
         return cam_id in self._readers
 
     def get_latest_frame(self, cam_id: str):
-        return self.frame_hub.get_latest(cam_id)
+        return self.frame_hub.latest(cam_id)
