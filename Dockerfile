@@ -29,4 +29,5 @@ RUN pip uninstall -y opencv-python opencv-contrib-python || true
 
 COPY . .
 
-CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT}
+# ✅ FIXED ENTRYPOINT
+CMD uvicorn main:app --host 0.0.0.0 --port ${PORT} --app-dir app
