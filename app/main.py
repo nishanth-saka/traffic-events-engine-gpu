@@ -98,26 +98,26 @@ def startup():
     logger.info("[Startup] FrameHub initialized and cameras registered")
 
     # -------------------------------
-    # Fake frame producer (DEBUG)
+    # RTSP frame ingestion
     # -------------------------------
-    def fake_frames():
-        t = 0
-        while True:
-            frame = np.zeros((720, 1280, 3), dtype=np.uint8)
+    def rtsp_ingestion():
+        from app.ingest.rtsp.reader import RTSPReader
 
-            # animated content so you KNOW it's live
-            frame[:, :] = (0, 180, 0)
-            cv = (t % 600)
-            frame[100:200, cv:cv + 200] = (255, 255, 255)
+        for cam_id, cam_config in CAMERAS.items():
+            try:
+                reader = RTSPReader(cam_config['url'], stream_type='SUB')
+                while True:
+                    frame = reader.read()
+                    if frame is not None:
+                        frame_hub.update(cam_id, frame)
+                    else:
+                        logger.warning(f"[RTSP] No frame received for camera {cam_id}")
+            except Exception as e:
+                logger.error(f"[RTSP] Error in RTSP ingestion for camera {cam_id}: {e}")
 
-            frame_hub.update("cam_1", frame)
+    threading.Thread(target=rtsp_ingestion, daemon=True).start()
 
-            t += 10
-            time.sleep(0.1)
-
-    threading.Thread(target=fake_frames, daemon=True).start()
-
-    logger.info("[Startup] Fake frame generator started")
+    logger.info("[Startup] RTSP ingestion started")
     logger.info("[Startup] Minimal startup complete (DEBUG MODE)")
 
 
