@@ -3,7 +3,7 @@
 import threading
 from typing import Dict
 
-from app.rtsp.reader import RTSPReader
+from app.ingest.rtsp.reader import RTSPReader
 
 
 class FrameStore:
