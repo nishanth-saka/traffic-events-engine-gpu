@@ -57,7 +57,7 @@ def startup():
     # ---- Stage-3 Lite: Detection ----
     logger.info("[Startup] Starting Stage-3 Lite detection workers")
 
-    # Load YOLO once (shared)
+    # Load YOLO once (shared by all workers)
     yolo_model = YOLO("yolov8n.pt")
 
     for cam_id in CAMERAS.keys():
@@ -66,5 +66,22 @@ def startup():
             frame_hub=app_state.frame_hub,
             detection_manager=app_state.detection_manager,
             model=yolo_model,
-            fps=3,          # 🔑 low FPS for ANPR stability
+            fps=3,
             conf=0.4,
+        )
+        worker.start()
+
+        logger.info(
+            "[Startup] Detection worker started for %s",
+            cam_id,
+        )
+
+    logger.info("[Startup] Startup complete")
+
+
+# -------------------------------------------------
+# Routes
+# -------------------------------------------------
+
+from app.routes import preview  # noqa: E402
+app.include_router(preview.router)
