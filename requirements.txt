@@ -8,7 +8,7 @@ numpy<2
 opencv-python-headless==4.9.0.80
 imageio-ffmpeg
 
-torch==2.1.0+cpu
-torchvision==0.16.0+cpu
-
-ultralytics
+# ML-related dependencies commented out for deployment testing
+# torch==2.1.0+cpu
+# torchvision==0.16.0+cpu
+# ultralytics
