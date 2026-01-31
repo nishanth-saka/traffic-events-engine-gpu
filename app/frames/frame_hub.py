@@ -27,6 +27,7 @@ class FrameHub:
         if not lock:
             return
         with lock:
+            logger.debug(f"[FrameHub] Updating frame for {cam_id}")
             self._frames[cam_id] = frame
 
     def latest(self, cam_id: str):
@@ -34,4 +35,5 @@ class FrameHub:
         if not lock:
             return None
         with lock:
+            logger.debug(f"[FrameHub] Retrieving latest frame for {cam_id}")
             return self._frames.get(cam_id)
