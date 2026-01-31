@@ -1,4 +1,4 @@
-# app/rtsp/reader.py
+# app/ingest/rtsp/reader.py
 
 import subprocess
 import threading
@@ -14,8 +14,7 @@ class RTSPReader(threading.Thread):
     """
     STAGE 1 RTSP Reader
 
-    Invariant:
-    - EXACTLY ONE RTSP connection per camera
+    - EXACTLY one RTSP connection per camera
     - MAIN stream only
     - Overwrite-only frame delivery
     """
@@ -82,7 +81,6 @@ class RTSPReader(threading.Thread):
                         (self.height, self.width, 3)
                     )
 
-                    # 🔒 overwrite-only
                     self.frame_store.update(self.cam_id, frame)
 
             except Exception as e:
