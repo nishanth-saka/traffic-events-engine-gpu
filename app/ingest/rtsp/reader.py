@@ -12,8 +12,8 @@ logger = logging.getLogger("RTSPReader")
 
 class RTSPReader(threading.Thread):
     """
-    Stage-2 RTSP reader.
-    Exactly ONE RTSP connection per camera.
+    MAIN RTSP reader.
+    Pushes frames into FrameHub.
     """
 
     def __init__(
@@ -53,6 +53,7 @@ class RTSPReader(threading.Thread):
         ]
 
     def run(self):
+        logger.info("[RTSP] Connecting MAIN stream: %s", self.cam_id)
         self.running = True
         self.frame_hub.register(self.cam_id)
 
@@ -77,11 +78,6 @@ class RTSPReader(threading.Thread):
                     self.frame_hub.update(self.cam_id, frame)
 
             except Exception:
-                logger.exception(f"[RTSP] {self.cam_id} crashed")
+                logger.exception("[RTSP] Crash on %s", self.cam_id)
 
             time.sleep(self.restart_delay)
-
-    def stop(self):
-        self.running = False
-        if self.process:
-            self.process.kill()
