@@ -57,25 +57,34 @@ class RTSPReader(threading.Thread):
         self.running = True
         self.frame_hub.register(self.cam_id)
 
+        frame_size = self.width * self.height * 3
+        buffer = bytearray()
+
         while self.running:
             try:
                 self.process = subprocess.Popen(
                     self._cmd(),
                     stdout=subprocess.PIPE,
                     stderr=subprocess.DEVNULL,
+                    bufsize=10**8,  # 🛡️ large buffer to avoid stalls
                 )
 
-                frame_size = self.width * self.height * 3
-
                 while self.running:
-                    raw = self.process.stdout.read(frame_size)
-                    if len(raw) != frame_size:
+                    chunk = self.process.stdout.read(4096)
+                    if not chunk:
                         break
 
-                    frame = np.frombuffer(raw, np.uint8).reshape(
-                        (self.height, self.width, 3)
-                    )
-                    self.frame_hub.update(self.cam_id, frame)
+                    buffer.extend(chunk)
+
+                    while len(buffer) >= frame_size:
+                        frame_bytes = buffer[:frame_size]
+                        buffer = buffer[frame_size:]
+
+                        frame = np.frombuffer(
+                            frame_bytes, np.uint8
+                        ).reshape((self.height, self.width, 3))
+
+                        self.frame_hub.update(self.cam_id, frame)
 
             except Exception:
                 logger.exception("[RTSP] Crash on %s", self.cam_id)

@@ -17,15 +17,20 @@ app = FastAPI(title="Traffic Events Engine")
 # 🔑 One launcher, one stream
 rtsp_launcher = RTSPLauncher(app_state.frame_hub)
 
-
 @app.on_event("startup")
 def startup():
     logger.info("[Startup] Registering cameras (Stage-1 / Single MAIN stream)")
 
     for cam_id, cfg in CAMERAS.items():
+        # 🛡️ Fail fast if config is invalid
+        if "main_rtsp_url" not in cfg:
+            raise RuntimeError(
+                f"Camera '{cam_id}' missing required 'main_rtsp_url' in config"
+            )
+
         rtsp_launcher.add_camera(
             cam_id=cam_id,
-            rtsp_url=cfg["main_rtsp_url"],  # ✅ CORRECT KEY
+            rtsp_url=cfg["main_rtsp_url"],
         )
 
         logger.info(
@@ -33,7 +38,6 @@ def startup():
         )
 
     logger.info("[Startup] Startup complete")
-
 
 from app.routes import preview  # noqa: E402
 app.include_router(preview.router)

@@ -22,7 +22,8 @@ class RTSPLauncher:
             rtsp_url=rtsp_url,
             frame_hub=self.frame_hub,
         )
-        reader.start()
+
+        reader.start()  # 🔑 start reader thread
         self._readers[cam_id] = reader
 
     def has_camera(self, cam_id: str) -> bool:

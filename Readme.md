@@ -15,8 +15,6 @@ curl -X POST \
   -f null -
 
 
-  1️⃣ Wire process_frame() into a fixed-FPS runner
-2️⃣ Add frame_ts = monotonic time at ingest
-3️⃣ Freeze-frame capture on plate.ocr.success
-4️⃣ Optional: downscale preview JPEG without touching MAIN
+https://traffic-events-engine-production.up.railway.app/preview/stream/cam_1
+
 
