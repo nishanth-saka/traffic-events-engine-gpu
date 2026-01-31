@@ -2,6 +2,7 @@ FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
 
 WORKDIR /app
 
@@ -29,5 +30,5 @@ RUN pip uninstall -y opencv-python opencv-contrib-python || true
 
 COPY . .
 
-# ✅ FIXED ENTRYPOINT
-CMD uvicorn main:app --host 0.0.0.0 --port ${PORT} --app-dir app
+# Railway-safe entrypoint
+CMD sh -c "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
