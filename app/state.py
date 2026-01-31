@@ -2,7 +2,6 @@
 
 import time
 import logging
-import cv2
 
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse

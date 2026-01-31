@@ -27,7 +27,7 @@ async def ingest_frame(
     frame_ts: float | None = Form(None),
     image: UploadFile = File(...),
 ):
-    import cv2  # lazy import
+    # Temporarily removed cv2 import for testing
 
     if image.content_type not in ("image/jpeg", "image/png"):
         raise HTTPException(status_code=415, detail="Unsupported image type")
