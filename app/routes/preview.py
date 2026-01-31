@@ -5,7 +5,7 @@ import logging
 import cv2
 
 from fastapi import APIRouter
-from fastapi.responses import StreamingResponse, Response
+from fastapi.responses import StreamingResponse
 
 from app.state import app_state
 
@@ -23,14 +23,11 @@ def mjpeg_preview(cam_id: str):
         min_interval = 1.0 / target_fps
         last_sent = 0.0
 
-        while True:
-            try:
-                frame = frame_hub.get_latest_frame(cam_id)
-            except Exception as e:
-                logger.exception("FrameHub error for %s", cam_id)
-                return
+        logger.warning("[MJPEG] generator started for %s", cam_id)
 
-            # No frames yet → just wait
+        while True:
+            frame = frame_hub.latest(cam_id)  # ✅ FIXED
+
             if frame is None:
                 time.sleep(0.05)
                 continue
@@ -58,10 +55,6 @@ def mjpeg_preview(cam_id: str):
                 + b"\r\n"
             )
 
-    # IMPORTANT:
-    # - No camera existence check
-    # - No exceptions raised
-    # - Always returns a valid response
     return StreamingResponse(
         frame_generator(),
         media_type="multipart/x-mixed-replace; boundary=frame",
