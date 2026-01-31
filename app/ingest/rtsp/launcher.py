@@ -2,6 +2,10 @@
 
 from typing import Dict
 from app.ingest.rtsp.reader import RTSPReader
+import threading
+import logging
+
+logger = logging.getLogger("RTSPLauncher")
 
 
 class RTSPLauncher:
@@ -17,14 +21,20 @@ class RTSPLauncher:
         if cam_id in self._readers:
             return
 
-        reader = RTSPReader(
-            cam_id=cam_id,
-            rtsp_url=rtsp_url,
-            frame_hub=self.frame_hub,
-        )
+        def initialize_reader():
+            try:
+                reader = RTSPReader(
+                    cam_id=cam_id,
+                    rtsp_url=rtsp_url,
+                    frame_hub=self.frame_hub,
+                )
+                self._readers[cam_id] = reader
+                reader.start()
+            except Exception as e:
+                logger.error(f"Failed to initialize RTSPReader for cam_id={cam_id}: {e}")
 
-        reader.start()  # 🔑 start reader thread
-        self._readers[cam_id] = reader
+        thread = threading.Thread(target=initialize_reader, daemon=True)
+        thread.start()
 
     def has_camera(self, cam_id: str) -> bool:
         return cam_id in self._readers

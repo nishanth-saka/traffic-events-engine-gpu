@@ -105,13 +105,12 @@ def startup():
 
         for cam_id, cam_config in CAMERAS.items():
             try:
-                reader = RTSPReader(cam_config['url'], stream_type='SUB')
-                while True:
-                    frame = reader.read()
-                    if frame is not None:
-                        frame_hub.update(cam_id, frame)
-                    else:
-                        logger.warning(f"[RTSP] No frame received for camera {cam_id}")
+                reader = RTSPReader(
+                    cam_id=cam_id,
+                    rtsp_url=cam_config['url'],
+                    frame_hub=frame_hub
+                )
+                reader.start()
             except Exception as e:
                 logger.error(f"[RTSP] Error in RTSP ingestion for camera {cam_id}: {e}")
 
