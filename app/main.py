@@ -39,28 +39,16 @@ print("==========================================\n")
 # Normal imports START HERE
 # =================================================
 import uuid
+import time
+import threading
 import logging
+import numpy as np
 from fastapi import FastAPI
 
 
 # ---- Guarded import: config ----
-try:
-    from app.config import CAMERAS
-    print("✅ from app.config import CAMERAS SUCCESS")
-except Exception as e:
-    print("🔥 FAILED importing app.config")
-    print("Exception:", repr(e))
-    raise
-
-
-# ---- Guarded import: shared state ----
-try:
-    from app.shared import app_state
-    print("✅ from app.shared import app_state SUCCESS")
-except Exception as e:
-    print("🔥 FAILED importing app.shared")
-    print("Exception:", repr(e))
-    raise
+from app.config import CAMERAS
+from app.shared import app_state
 
 
 # =================================================
@@ -81,35 +69,61 @@ app = FastAPI(title="Traffic Events Engine")
 # =================================================
 @app.on_event("startup")
 def startup():
+    print("🔥 STARTUP FUNCTION ENTERED")
+
+    boot_id = str(uuid.uuid4())[:8]
+    logger.warning(
+        "🔥 STARTUP PROBE 🔥 | boot_id=%s | pid=%s | cwd=%s | PYTHONPATH=%s",
+        boot_id,
+        os.getpid(),
+        os.getcwd(),
+        os.getenv("PYTHONPATH"),
+    )
+
+    # -------------------------------
+    # Initialize FrameHub (ONCE)
+    # -------------------------------
     from app.frames.frame_hub import FrameHub
-    from app.shared import app_state
-    from app.config import CAMERAS
 
     frame_hub = FrameHub()
     app_state.frame_hub = frame_hub
 
-    # 🔑 REGISTER CAMERAS
+    # -------------------------------
+    # Register cameras
+    # -------------------------------
     for cam_id in CAMERAS.keys():
         frame_hub.register(cam_id)
 
     logger.info("[Startup] FrameHub initialized and cameras registered")
 
     # -------------------------------
-    # Initialize FrameHub (REQUIRED)
+    # Fake frame producer (DEBUG)
     # -------------------------------
-    from app.frames.frame_hub import FrameHub  # ✅ FIXED PATH
+    def fake_frames():
+        t = 0
+        while True:
+            frame = np.zeros((720, 1280, 3), dtype=np.uint8)
 
-    app_state.frame_hub = FrameHub()
+            # animated content so you KNOW it's live
+            frame[:, :] = (0, 180, 0)
+            cv = (t % 600)
+            frame[100:200, cv:cv + 200] = (255, 255, 255)
 
-    logger.info("[Startup] FrameHub initialized")
-    logger.info("[Startup] Minimal startup complete (no RTSP, no YOLO)")
+            frame_hub.update("cam_1", frame)
+
+            t += 10
+            time.sleep(0.1)
+
+    threading.Thread(target=fake_frames, daemon=True).start()
+
+    logger.info("[Startup] Fake frame generator started")
+    logger.info("[Startup] Minimal startup complete (DEBUG MODE)")
 
 
 # =================================================
 # Routes
 # =================================================
 from app.routes import preview  # noqa: E402
-
 app.include_router(preview.router)
 
 
