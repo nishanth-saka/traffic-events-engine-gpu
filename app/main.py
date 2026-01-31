@@ -39,14 +39,9 @@ print("==========================================\n")
 # Normal imports START HERE
 # =================================================
 import uuid
-import time
-import threading
 import logging
-import numpy as np
 from fastapi import FastAPI
 
-
-# ---- Guarded import: config ----
 from app.config import CAMERAS
 from app.shared import app_state
 
@@ -54,7 +49,10 @@ from app.shared import app_state
 # =================================================
 # Logging setup
 # =================================================
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
 logger = logging.getLogger(__name__)
 logger.debug("Logging initialized successfully.")
 
@@ -98,25 +96,20 @@ def startup():
     logger.info("[Startup] FrameHub initialized and cameras registered")
 
     # -------------------------------
-    # RTSP frame ingestion
+    # RTSP ingestion via RTSPLauncher (Phase 2)
     # -------------------------------
-    def rtsp_ingestion():
-        from app.ingest.rtsp.reader import RTSPReader
+    from app.ingest.rtsp.launcher import RTSPLauncher
 
-        for cam_id, cam_config in CAMERAS.items():
-            try:
-                reader = RTSPReader(
-                    cam_id=cam_id,
-                    rtsp_url=cam_config['url'],
-                    frame_hub=frame_hub
-                )
-                reader.start()
-            except Exception as e:
-                logger.error(f"[RTSP] Error in RTSP ingestion for camera {cam_id}: {e}")
+    rtsp_launcher = RTSPLauncher(frame_hub)
+    app_state.rtsp_launcher = rtsp_launcher
 
-    threading.Thread(target=rtsp_ingestion, daemon=True).start()
+    for cam_id, cam_cfg in CAMERAS.items():
+        rtsp_launcher.add_camera(
+            cam_id=cam_id,
+            rtsp_url=cam_cfg["sub"],  # 🔒 explicit SUB stream
+        )
 
-    logger.info("[Startup] RTSP ingestion started")
+    logger.info("[Startup] RTSP ingestion started via RTSPLauncher")
     logger.info("[Startup] Minimal startup complete (DEBUG MODE)")
 
 
@@ -124,6 +117,7 @@ def startup():
 # Routes
 # =================================================
 from app.routes import preview  # noqa: E402
+
 app.include_router(preview.router)
 
 
