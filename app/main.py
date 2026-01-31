@@ -36,7 +36,7 @@ print("==========================================\n")
 
 
 # =================================================
-# Normal imports START HERE (guarded)
+# Normal imports START HERE (SAFE ONLY)
 # =================================================
 import time
 import uuid
@@ -61,12 +61,6 @@ except Exception as e:
     print("Exception:", repr(e))
     raise
 
-# ---- RTSP + Detection imports ----
-from app.ingest.rtsp.launcher import RTSPLauncher
-from ultralytics import YOLO
-from app.detection.detection_manager import DetectionManager
-from app.detection.detection_worker import DetectionWorker
-
 
 # =================================================
 # Logging setup
@@ -82,20 +76,13 @@ app = FastAPI(title="Traffic Events Engine")
 
 
 # =================================================
-# Core runtime objects
-# =================================================
-rtsp_launcher = RTSPLauncher(app_state.frame_hub)
-app_state.detection_manager = DetectionManager()
-APP_START_TIME = time.time()
-
-
-# =================================================
-# Startup
+# Startup (MINIMAL, SAFE)
 # =================================================
 @app.on_event("startup")
 def startup():
-    boot_id = str(uuid.uuid4())[:8]
+    print("🔥 STARTUP FUNCTION ENTERED")
 
+    boot_id = str(uuid.uuid4())[:8]
     logger.warning(
         "🔥 STARTUP PROBE 🔥 | boot_id=%s | pid=%s | cwd=%s | PYTHONPATH=%s",
         boot_id,
@@ -104,38 +91,7 @@ def startup():
         os.getenv("PYTHONPATH"),
     )
 
-    logger.info("[Startup] Registering cameras")
-
-    for cam_id, cfg in CAMERAS.items():
-        if "main_rtsp_url" not in cfg:
-            raise RuntimeError(
-                f"Camera '{cam_id}' missing required 'main_rtsp_url'"
-            )
-
-        rtsp_launcher.add_camera(
-            cam_id=cam_id,
-            rtsp_url=cfg["main_rtsp_url"],
-        )
-
-        logger.info("[Startup] Camera %s registered", cam_id)
-
-    logger.info("[Startup] Loading YOLO model")
-    yolo_model = YOLO("yolov8n.pt")
-
-    for cam_id in CAMERAS.keys():
-        worker = DetectionWorker(
-            cam_id=cam_id,
-            frame_hub=app_state.frame_hub,
-            detection_manager=app_state.detection_manager,
-            model=yolo_model,
-            fps=3,
-            conf=0.4,
-        )
-        worker.start()
-
-        logger.info("[Startup] Detection worker started for %s", cam_id)
-
-    logger.info("[Startup] Startup complete")
+    logger.info("[Startup] Minimal startup complete (YOLO disabled)")
 
 
 # =================================================
@@ -144,12 +100,12 @@ def startup():
 from app.routes import preview  # noqa: E402
 app.include_router(preview.router)
 
+
 # =================================================
 # HARD ENTRYPOINT (Railway-safe)
 # =================================================
 if __name__ == "__main__":
     import uvicorn
-    import os
 
     print("🔥 __main__ ENTRYPOINT HIT")
     print("PORT =", os.environ.get("PORT"))
