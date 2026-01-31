@@ -4,6 +4,7 @@ print("### LOADED MAIN.PY FROM:", __file__)
 
 import logging
 from fastapi import FastAPI
+
 from app.config import CAMERAS
 from app.state import app_state
 from app.ingest.rtsp.launcher import RTSPLauncher
@@ -13,23 +14,22 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Traffic Events Engine")
 
-# 🔑 Create launcher HERE (one-way dependency)
+# 🔑 One launcher, one stream
 rtsp_launcher = RTSPLauncher(app_state.frame_hub)
 
 
 @app.on_event("startup")
 def startup():
-    logger.info("[Startup] Registering cameras (Stage-2)")
+    logger.info("[Startup] Registering cameras (Stage-1 / Single MAIN stream)")
 
     for cam_id, cfg in CAMERAS.items():
-        # 🔒 Stage-2 invariant: ONLY sub stream
         rtsp_launcher.add_camera(
             cam_id=cam_id,
-            rtsp_url=cfg["sub"],
+            rtsp_url=cfg["main_rtsp_url"],  # ✅ CORRECT KEY
         )
 
         logger.info(
-            f"[Startup] Camera {cam_id}: SUB stream registered (MAIN disabled)"
+            f"[Startup] Camera {cam_id}: MAIN stream registered"
         )
 
     logger.info("[Startup] Startup complete")
