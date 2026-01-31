@@ -1,95 +1,111 @@
-# app/detection/detector.py
+# app/detection/detection_worker.py
 
 import time
-import logging
 import threading
+import logging
+import numpy as np
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("DetectionWorker")
 
 
-class DetectorWorker(threading.Thread):
+class DetectionWorker(threading.Thread):
     """
-    Headless detection worker.
+    FPS-controlled detection worker.
 
-    - Pulls latest frame
-    - Runs detector
-    - Stores normalized detections
+    - Pulls ONLY latest frame from FrameHub
+    - Drops frames by design
+    - Runs YOLO at low FPS (3–5)
+    - Pushes metadata ONLY
     """
 
     def __init__(
         self,
         cam_id: str,
-        camera_manager,
+        frame_hub,
         detection_manager,
-        detector_fn,
+        model,
         fps: int = 3,
+        conf: float = 0.4,
     ):
         super().__init__(daemon=True)
-
         self.cam_id = cam_id
-        self.camera_manager = camera_manager
+        self.frame_hub = frame_hub
         self.detection_manager = detection_manager
-        self.detector_fn = detector_fn
+        self.model = model
+        self.conf = conf
 
         self.interval = 1.0 / max(fps, 1)
-        self.last_run = 0.0
         self.running = True
-
-        self.last_error_time = 0.0
-        self.error_backoff_sec = 5.0
+        self._last_run = 0.0
 
     def run(self):
-        logger.info("[DetectorWorker] Started for %s", self.cam_id)
+        logger.info(
+            "[DETECT] Worker started for %s @ %.1f FPS",
+            self.cam_id,
+            1.0 / self.interval,
+        )
 
         while self.running:
             now = time.time()
-
-            if now - self.last_run < self.interval:
-                time.sleep(0.005)
+            if now - self._last_run < self.interval:
+                time.sleep(0.01)
                 continue
 
-            self.last_run = now
+            self._last_run = now
+
+            frame = self.frame_hub.get_latest(self.cam_id)
+            if frame is None:
+                continue
 
             try:
-                frame = self.camera_manager.get_latest_frame(self.cam_id)
-                if frame is None:
-                    continue
-
-                logger.info(
-                    "[TRACE][%s] Frame received shape=%s",
-                    self.cam_id,
-                    getattr(frame, "shape", None),
+                results = self.model(
+                    frame,
+                    conf=self.conf,
+                    verbose=False,
                 )
 
-                start = time.time()
-                detections = self.detector_fn(frame)
-                latency_ms = (time.time() - start) * 1000.0
+                vehicles = []
+                plates = []
 
-                logger.info(
-                    "[TRACE][%s] Detector produced %d detections (%.1f ms)",
-                    self.cam_id,
-                    len(detections),
-                    latency_ms,
-                )
+                for r in results:
+                    if r.boxes is None:
+                        continue
 
-                normalized = []
-                for d in detections:
-                    normalized.append({
-                        "class": d["class"],
-                        "confidence": float(d["confidence"]),
-                        "bbox": d["bbox"],
-                    })
+                    for box in r.boxes:
+                        cls_id = int(box.cls[0])
+                        conf = float(box.conf[0])
+
+                        x1, y1, x2, y2 = map(
+                            int, box.xyxy[0].tolist()
+                        )
+
+                        entry = {
+                            "bbox": (x1, y1, x2, y2),
+                            "conf": conf,
+                            "cls": cls_id,
+                        }
+
+                        # ---- COCO vehicle classes ----
+                        if cls_id in {2, 3, 5, 7}:  # car, moto, bus, truck
+                            vehicles.append(entry)
+
+                        # ---- License plate class (depends on model) ----
+                        if cls_id == 0:  # plate class (common)
+                            plates.append(entry)
 
                 self.detection_manager.update(
                     self.cam_id,
-                    normalized,
-                    latency_ms=latency_ms,
+                    vehicles=vehicles,
+                    plates=plates,
                 )
 
-            except Exception:
-                if time.time() - self.last_error_time > self.error_backoff_sec:
-                    logger.exception(
-                        "[DetectorWorker][%s] detection error",
+                if plates:
+                    logger.info(
+                        "[DETECT] %s plates=%d vehicles=%d",
                         self.cam_id,
+                        len(plates),
+                        len(vehicles),
                     )
-                    self.last_error_time = time.time()
+
+            except Exception:
+                logger.exception("[DETECT] Crash on %s", self.cam_id)

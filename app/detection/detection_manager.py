@@ -1,46 +1,46 @@
 # app/detection/detection_manager.py
 
-import time
 import threading
-import logging
-
-logger = logging.getLogger(__name__)
+import time
+from typing import Dict, List
 
 
 class DetectionManager:
     """
-    Thread-safe detection cache.
-    Stores latest detections per camera.
+    Thread-safe detection metadata cache.
+
+    Stores ONLY metadata (no frames):
+    - vehicles
+    - plates
+    - timestamps
     """
 
     def __init__(self):
-        # cam_id -> { ts, boxes, latency_ms }
-        self._latest = {}
+        # cam_id -> data
+        self._data: Dict[str, dict] = {}
         self._lock = threading.Lock()
 
-    def update(self, cam_id: str, detections: list, latency_ms: float):
+    def update(
+        self,
+        cam_id: str,
+        *,
+        vehicles: List[dict],
+        plates: List[dict],
+    ):
         with self._lock:
-            self._latest[cam_id] = {
+            self._data[cam_id] = {
                 "ts": time.time(),
-                "boxes": detections,
-                "latency_ms": latency_ms,
+                "vehicles": vehicles,
+                "plates": plates,
             }
 
-        logger.info(
-            "[TRACE][%s] DetectionManager.update(): %d boxes (%.1f ms)",
-            cam_id,
-            len(detections),
-            latency_ms,
-        )
-
-    def get(self, cam_id: str, max_age_sec: float = 1.0):
+    def get(self, cam_id: str, max_age_sec: float = 1.0) -> dict | None:
         with self._lock:
-            data = self._latest.get(cam_id)
+            entry = self._data.get(cam_id)
+            if not entry:
+                return None
 
-        if not data:
-            return []
+            if time.time() - entry["ts"] > max_age_sec:
+                return None
 
-        if time.time() - data["ts"] > max_age_sec:
-            return []
-
-        return data["boxes"]
+            return entry
