@@ -143,3 +143,21 @@ def startup():
 # =================================================
 from app.routes import preview  # noqa: E402
 app.include_router(preview.router)
+
+# =================================================
+# HARD ENTRYPOINT (Railway-safe)
+# =================================================
+if __name__ == "__main__":
+    import uvicorn
+    import os
+
+    print("🔥 __main__ ENTRYPOINT HIT")
+    print("PORT =", os.environ.get("PORT"))
+
+    uvicorn.run(
+        "app.main:app",
+        host="0.0.0.0",
+        port=int(os.environ["PORT"]),
+        log_level="info",
+        access_log=True,
+    )
