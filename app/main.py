@@ -36,14 +36,14 @@ print("==========================================\n")
 
 
 # =================================================
-# Normal imports START HERE (SAFE ONLY)
+# Normal imports START HERE
 # =================================================
-import time
 import uuid
 import logging
 from fastapi import FastAPI
 
-# ---- Guarded import: app.config ----
+
+# ---- Guarded import: config ----
 try:
     from app.config import CAMERAS
     print("✅ from app.config import CAMERAS SUCCESS")
@@ -52,12 +52,13 @@ except Exception as e:
     print("Exception:", repr(e))
     raise
 
-# ---- Guarded import: app.state ----
+
+# ---- Guarded import: shared state ----
 try:
     from app.shared import app_state
-    print("✅ from app.state import app_state SUCCESS")
+    print("✅ from app.shared import app_state SUCCESS")
 except Exception as e:
-    print("🔥 FAILED importing app.state")
+    print("🔥 FAILED importing app.shared")
     print("Exception:", repr(e))
     raise
 
@@ -76,7 +77,7 @@ app = FastAPI(title="Traffic Events Engine")
 
 
 # =================================================
-# Startup (MINIMAL, SAFE)
+# Startup — RUNTIME WIRING ONLY
 # =================================================
 @app.on_event("startup")
 def startup():
@@ -91,13 +92,22 @@ def startup():
         os.getenv("PYTHONPATH"),
     )
 
-    logger.info("[Startup] Minimal startup complete (YOLO disabled)")
+    # -------------------------------
+    # Initialize FrameHub (REQUIRED)
+    # -------------------------------
+    from app.cameras.frame_hub import FrameHub
+
+    app_state.frame_hub = FrameHub()
+
+    logger.info("[Startup] FrameHub initialized")
+    logger.info("[Startup] Minimal startup complete (no RTSP, no YOLO)")
 
 
 # =================================================
 # Routes
 # =================================================
 from app.routes import preview  # noqa: E402
+
 app.include_router(preview.router)
 
 
