@@ -7,6 +7,7 @@ from app.ingest.frame.plate_proposal import propose_plate_regions
 from app.ingest.frame.quality_gate import evaluate_plate_quality
 from app.ingest.frame.ocr import run_ocr
 from app.ingest.frame.events import emit_event
+from app.state import app_state
 
 logger = logging.getLogger(__name__)
 
@@ -16,25 +17,19 @@ def process_frame(
     camera_id: str,
     frame_ts: float,
     frame,
-    frame_store,
 ):
     """
-    Background-executed frame processing pipeline.
+    Stage-2 frame processing pipeline.
+
+    - Receives MAIN frame (already ingested)
+    - Does NOT own storage
+    - Emits detections + events
     """
 
-    logger.info(
-        "[PIPELINE] process_frame started | camera_id=%s ts=%s",
+    logger.debug(
+        "[PIPELINE] process_frame | camera_id=%s ts=%s",
         camera_id,
         frame_ts,
-    )
-
-    # -------------------------------------------------
-    # Register frame
-    # -------------------------------------------------
-    frame_store.update(
-        camera_id=camera_id,
-        frame=frame,
-        ts=frame_ts,
     )
 
     # -------------------------------------------------
@@ -42,8 +37,7 @@ def process_frame(
     # -------------------------------------------------
     vehicles = detect_vehicles(frame)
 
-    # 🔑 Publish detections to temporal layer
-    from app.state import app_state
+    # 🔑 Publish detections for preview / temporal layers
     app_state.detection_manager.update(
         cam_id=camera_id,
         detections=vehicles,
@@ -58,7 +52,6 @@ def process_frame(
         return
 
     for vehicle in vehicles:
-        # ✅ FIX: derive crop from bbox
         x1, y1, x2, y2 = vehicle["bbox"]
         vehicle_crop = frame[y1:y2, x1:x2]
 
