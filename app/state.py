@@ -7,8 +7,6 @@ import cv2
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 
-from app.state import app_state
-
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/preview", tags=["preview"])
@@ -16,7 +14,9 @@ router = APIRouter(prefix="/preview", tags=["preview"])
 
 @router.get("/stream/{cam_id}")
 def mjpeg_preview(cam_id: str):
-    frame_hub = app_state.frame_hub  # ✅ THIS IS CORRECT FOR YOUR REPO
+    from app.state import app_state  # Lazy import to resolve circular dependency
+
+    frame_hub = app_state.frame_hub
 
     def frame_generator():
         target_fps = 10.0
