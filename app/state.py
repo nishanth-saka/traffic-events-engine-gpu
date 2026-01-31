@@ -1,5 +1,8 @@
 # app/state.py
 
+print("### LOADED STATE.PY FROM:", __file__)
+print("### STATE.PY HASH CHECK: STAGE1_SINGLE_RTSP")
+
 import threading
 from typing import Dict
 
