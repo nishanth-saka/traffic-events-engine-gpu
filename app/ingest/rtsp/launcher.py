@@ -1,35 +1,39 @@
 # app/ingest/rtsp/launcher.py
 
-import asyncio
 import logging
-
 from app.ingest.rtsp.reader import RTSPReader
 
-logger = logging.getLogger("RTSP")
-
-RTSP_CAMERAS = {
-    "cam_1": "rtsp://USER:PASSWORD@IP:554/sub_stream",
-    # add more cameras here
-}
+logger = logging.getLogger(__name__)
 
 
-async def start_rtsp_after_delay(delay_sec: int = 5):
+class RTSPLauncher:
     """
-    Start RTSP readers AFTER FastAPI startup.
-
-    This prevents slow RTSP connections from blocking deploys.
+    Stage-2 RTSP lifecycle owner.
+    MAIN stream only.
     """
-    logger.info("[RTSP] Delaying RTSP startup by %s seconds", delay_sec)
-    await asyncio.sleep(delay_sec)
 
-    logger.info("[RTSP] Starting RTSP readers")
+    def __init__(self, frame_hub):
+        self._readers = {}
+        self._frame_hub = frame_hub
 
-    for cam_id, rtsp_url in RTSP_CAMERAS.items():
+    def add_camera(self, cam_id: str, rtsp_url: str, resolution=(1920, 1080)):
+        if cam_id in self._readers:
+            return
+
         reader = RTSPReader(
-            camera_id=cam_id,
+            cam_id=cam_id,
             rtsp_url=rtsp_url,
-            fps=3,
+            frame_hub=self._frame_hub,
+            width=resolution[0],
+            height=resolution[1],
         )
+        self._readers[cam_id] = reader
         reader.start()
 
-        logger.info("[RTSP] RTSPReader started for %s", cam_id)
+        logger.info(f"[RTSPLauncher] Started MAIN stream for {cam_id}")
+
+    def has_camera(self, cam_id: str) -> bool:
+        return cam_id in self._readers
+
+    def get_latest_frame(self, cam_id: str):
+        return self._frame_hub.latest(cam_id)
