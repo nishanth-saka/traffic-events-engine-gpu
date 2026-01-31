@@ -16,5 +16,7 @@ curl -X POST \
 
 
 https://traffic-events-engine-production.up.railway.app/preview/stream/cam_1
+https://traffic-events-engine-production.up.railway.app/preview/stream/cam_1
+
 
 
