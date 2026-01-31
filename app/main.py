@@ -20,7 +20,7 @@ except Exception:
 
 from fastapi import FastAPI
 
-from app.routes import debug, events, health
+from app.routes import debug, events, health, runtime
 from app.ingest.frame.router import router as ingest_router
 
 from app.state import app_state
@@ -40,6 +40,7 @@ app.include_router(events.router)
 app.include_router(health.router)
 app.include_router(ingest_router)   # optional (testing)
 app.include_router(debug.router)
+app.include_router(runtime.router)
 
 # -------------------------------------------------
 # Startup: delayed RTSP startup (NON-BLOCKING)
