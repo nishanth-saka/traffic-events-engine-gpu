@@ -1,8 +1,10 @@
 # app/main.py
-raise RuntimeError("🔥 CACHE BUST TEST: main.py executed")
-print("### LOADED MAIN.PY FROM:", __file__)
 
+import os
+import time
+import uuid
 import logging
+
 from fastapi import FastAPI
 
 from app.config import CAMERAS
@@ -14,8 +16,16 @@ from ultralytics import YOLO
 from app.detection.detection_manager import DetectionManager
 from app.detection.detection_worker import DetectionWorker
 
+# -------------------------------------------------
+# Logging
+# -------------------------------------------------
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# -------------------------------------------------
+# FastAPI app
+# -------------------------------------------------
 
 app = FastAPI(title="Traffic Events Engine")
 
@@ -29,12 +39,27 @@ rtsp_launcher = RTSPLauncher(app_state.frame_hub)
 # Detection manager (Stage-3 Lite)
 app_state.detection_manager = DetectionManager()
 
+# Track process start time (optional health checks)
+APP_START_TIME = time.time()
+
 # -------------------------------------------------
 # Startup
 # -------------------------------------------------
 
 @app.on_event("startup")
 def startup():
+    # 🔥 Railway-safe startup probe (cold boot indicator)
+    boot_id = str(uuid.uuid4())[:8]
+    start_ts = time.strftime("%Y-%m-%d %H:%M:%S")
+
+    logger.warning(
+        "🔥 STARTUP PROBE 🔥 | boot_id=%s | ts=%s | pid=%s | railway_env=%s",
+        boot_id,
+        start_ts,
+        os.getpid(),
+        os.getenv("RAILWAY_ENVIRONMENT"),
+    )
+
     logger.info("[Startup] Registering cameras (Stage-1 / Single MAIN stream)")
 
     # ---- RTSP startup ----
@@ -78,10 +103,10 @@ def startup():
 
     logger.info("[Startup] Startup complete")
 
-
 # -------------------------------------------------
 # Routes
 # -------------------------------------------------
 
 from app.routes import preview  # noqa: E402
+
 app.include_router(preview.router)
