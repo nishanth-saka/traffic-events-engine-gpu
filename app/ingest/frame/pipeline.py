@@ -16,14 +16,10 @@ def process_frame(
     camera_id: str,
     frame_ts: float,
     frame,
-    frame_store,   # 👈 injected dependency
+    frame_store,
 ):
     """
     Background-executed frame processing pipeline.
-
-    IMPORTANT:
-    - Registers frame in the provided FrameStore
-    - Emits domain events only
     """
 
     logger.info(
@@ -41,10 +37,17 @@ def process_frame(
         ts=frame_ts,
     )
 
-    # -----------------------------
+    # -------------------------------------------------
     # Vehicle detection
-    # -----------------------------
+    # -------------------------------------------------
     vehicles = detect_vehicles(frame)
+
+    # 🔑 Publish detections to temporal layer
+    from app.state import app_state
+    app_state.detection_manager.update(
+        cam_id=camera_id,
+        detections=vehicles,
+    )
 
     if not vehicles:
         emit_event(
@@ -55,7 +58,9 @@ def process_frame(
         return
 
     for vehicle in vehicles:
-        vehicle_crop = vehicle["crop"]
+        # ✅ FIX: derive crop from bbox
+        x1, y1, x2, y2 = vehicle["bbox"]
+        vehicle_crop = frame[y1:y2, x1:x2]
 
         # -----------------------------
         # Plate proposal
