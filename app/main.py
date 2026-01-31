@@ -22,9 +22,14 @@ def startup():
     logger.info("[Startup] Registering cameras (Stage-2)")
 
     for cam_id, cfg in CAMERAS.items():
+        # 🔒 Stage-2 invariant: ONLY sub stream
         rtsp_launcher.add_camera(
             cam_id=cam_id,
-            rtsp_url=cfg["main"],
+            rtsp_url=cfg["sub"],
+        )
+
+        logger.info(
+            f"[Startup] Camera {cam_id}: SUB stream registered (MAIN disabled)"
         )
 
     logger.info("[Startup] Startup complete")
