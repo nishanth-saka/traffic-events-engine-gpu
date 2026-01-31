@@ -3,6 +3,7 @@ import threading
 import logging
 
 from app.detection.vehicle_detector import detect_vehicles
+from app.ingest.frame.pipeline import process_frame   # ✅ ADDED
 
 logger = logging.getLogger("DetectionWorker")
 
@@ -16,7 +17,7 @@ class DetectionWorker(threading.Thread):
     - Drops frames by design
     - Runs at low, controlled FPS
     - Publishes VEHICLE METADATA ONLY
-    - NO plates, NO OCR, NO ANPR yet
+    - NO plates in metadata (plates handled by Phase-A pipeline)
     """
 
     def __init__(
@@ -55,16 +56,32 @@ class DetectionWorker(threading.Thread):
             if frame is None:
                 continue
 
+            # -------------------------------------------------
+            # Phase-A ANPR pipeline (SIDE-EFFECT ONLY)
+            # -------------------------------------------------
+            try:
+                process_frame(
+                    camera_id=self.cam_id,
+                    frame_ts=now,
+                    frame=frame,
+                    frame_store=None,   # not used; safe placeholder
+                )
+            except Exception:
+                logger.exception(
+                    "[ANPR] Crash in Phase-A pipeline on %s",
+                    self.cam_id,
+                )
+
             try:
                 vehicles = detect_vehicles(frame)
 
                 # ---------------------------------------------
-                # Publish metadata ONLY
+                # Publish VEHICLE metadata ONLY
                 # ---------------------------------------------
                 self.detection_manager.update(
                     self.cam_id,
                     vehicles=vehicles,
-                    plates=[],   # 🔒 plates intentionally empty in Stage-1
+                    plates=[],   # 🔒 plates intentionally empty here
                 )
 
                 logger.info(
