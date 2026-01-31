@@ -1,11 +1,12 @@
 # app/ingest/rtsp/reader.py
+
 import cv2
 import time
 import threading
 import logging
 
 from app.ingest.frame.pipeline import process_frame
-from app.state import app_state
+from app.state import app_state, runtime_state
 
 logger = logging.getLogger("RTSP")
 
@@ -19,22 +20,34 @@ class RTSPReader(threading.Thread):
         self.running = True
 
     def run(self):
+        logger.info("[RTSP] Opening stream for %s", self.camera_id)
+
         cap = cv2.VideoCapture(self.rtsp_url)
 
         if not cap.isOpened():
+            runtime_state.rtsp_connected[self.camera_id] = False
             logger.error("[RTSP] Failed to open %s", self.rtsp_url)
             return
+
+        # 🔄 mark connected
+        runtime_state.rtsp_connected[self.camera_id] = True
+        runtime_state.frame_count[self.camera_id] = 0
 
         logger.info("[RTSP] Connected: %s", self.camera_id)
 
         while self.running:
             ok, frame = cap.read()
             if not ok:
+                runtime_state.rtsp_connected[self.camera_id] = False
                 logger.warning("[RTSP] Frame read failed: %s", self.camera_id)
                 time.sleep(1)
                 continue
 
             ts = time.time()
+
+            # 📊 metrics
+            runtime_state.last_frame_ts[self.camera_id] = ts
+            runtime_state.frame_count[self.camera_id] += 1
 
             try:
                 process_frame(
@@ -44,8 +57,10 @@ class RTSPReader(threading.Thread):
                     frame_store=app_state.frames,
                 )
             except Exception:
-                logger.exception("[RTSP] Processing failed")
+                logger.exception("[RTSP] Processing failed for %s", self.camera_id)
 
             time.sleep(self.interval)
 
         cap.release()
+        runtime_state.rtsp_connected[self.camera_id] = False
+        logger.info("[RTSP] Stream closed: %s", self.camera_id)
