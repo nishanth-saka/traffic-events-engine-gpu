@@ -81,16 +81,18 @@ app = FastAPI(title="Traffic Events Engine")
 # =================================================
 @app.on_event("startup")
 def startup():
-    print("🔥 STARTUP FUNCTION ENTERED")
+    from app.frames.frame_hub import FrameHub
+    from app.shared import app_state
+    from app.config import CAMERAS
 
-    boot_id = str(uuid.uuid4())[:8]
-    logger.warning(
-        "🔥 STARTUP PROBE 🔥 | boot_id=%s | pid=%s | cwd=%s | PYTHONPATH=%s",
-        boot_id,
-        os.getpid(),
-        os.getcwd(),
-        os.getenv("PYTHONPATH"),
-    )
+    frame_hub = FrameHub()
+    app_state.frame_hub = frame_hub
+
+    # 🔑 REGISTER CAMERAS
+    for cam_id in CAMERAS.keys():
+        frame_hub.register(cam_id)
+
+    logger.info("[Startup] FrameHub initialized and cameras registered")
 
     # -------------------------------
     # Initialize FrameHub (REQUIRED)
