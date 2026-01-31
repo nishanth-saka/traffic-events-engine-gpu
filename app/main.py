@@ -104,6 +104,13 @@ def startup():
     app_state.rtsp_launcher = rtsp_launcher
 
     for cam_id, cam_cfg in CAMERAS.items():
+        if "sub" not in cam_cfg:
+            logger.warning(
+                "[Startup] Camera '%s' configuration missing 'sub' key. Skipping.",
+                cam_id,
+            )
+            continue
+
         rtsp_launcher.add_camera(
             cam_id=cam_id,
             rtsp_url=cam_cfg["sub"],  # 🔒 explicit SUB stream

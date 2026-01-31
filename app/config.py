@@ -24,10 +24,11 @@ STAGE 1:
 
 CAMERAS = {
     "cam_1": {
-        "main_rtsp_url": "rtsp://admin:Admin%40123@103.88.236.191:10554/cam/realmonitor?channel=1&subtype=0",
-        "url": "rtsp://admin:Admin%40123@103.88.236.191:10554/cam/realmonitor?channel=1&subtype=1"
+        "main": "rtsp://admin:Admin%40123@103.88.236.191:10554/cam/realmonitor?channel=1&subtype=0",
+        "sub":  "rtsp://admin:Admin%40123@103.88.236.191:10554/cam/realmonitor?channel=1&subtype=1",
     }
 }
+
 
 # Future-proofing (used in later stages)
 DEFAULT_MAIN_RESOLUTION = (1920, 1080)
