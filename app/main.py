@@ -1,7 +1,8 @@
+print("### LOADED MAIN.PY FROM:", __file__)
+
 # app/main.py
 
 import logging
-
 from fastapi import FastAPI
 
 from app.config import CAMERAS
@@ -10,14 +11,14 @@ from app.state import app_state
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# -------------------------------------------------
-# FastAPI app MUST be created first
-# -------------------------------------------------
+# =================================================
+# FastAPI app MUST exist before decorators
+# =================================================
 app = FastAPI(title="Traffic Events Engine")
 
-# -------------------------------------------------
-# Startup
-# -------------------------------------------------
+# =================================================
+# Startup hook
+# =================================================
 @app.on_event("startup")
 def startup():
     logger.info("[Startup] Registering cameras (Stage-2)")
@@ -30,10 +31,9 @@ def startup():
 
     logger.info("[Startup] Camera registration complete")
 
-# -------------------------------------------------
-# Routes
-# -------------------------------------------------
-# (import AFTER app is defined)
+# =================================================
+# Routes (import AFTER app exists)
+# =================================================
 from app.routes import preview  # noqa: E402
 
 app.include_router(preview.router)
