@@ -1,4 +1,4 @@
-# app/detection/detection_worker.py
+# app/detection/detector.py
 
 import time
 import threading
@@ -10,12 +10,13 @@ logger = logging.getLogger("DetectionWorker")
 
 class DetectionWorker(threading.Thread):
     """
-    FPS-controlled detection worker.
+    Minimal FPS-controlled detection worker (NO ML).
 
-    - Pulls ONLY latest frame from FrameHub
+    Guarantees:
+    - Pulls ONLY latest frame from FrameHub (MAIN stream)
     - Drops frames by design
-    - Runs YOLO at low FPS (3–5)
-    - Pushes metadata ONLY
+    - Runs at low, controlled FPS
+    - Proves MAIN → detection pipeline is alive
     """
 
     def __init__(
@@ -23,16 +24,13 @@ class DetectionWorker(threading.Thread):
         cam_id: str,
         frame_hub,
         detection_manager,
-        model,
-        fps: int = 3,
-        conf: float = 0.4,
+        fps: int = 2,
     ):
         super().__init__(daemon=True)
+
         self.cam_id = cam_id
         self.frame_hub = frame_hub
         self.detection_manager = detection_manager
-        self.model = model
-        self.conf = conf
 
         self.interval = 1.0 / max(fps, 1)
         self.running = True
@@ -40,7 +38,7 @@ class DetectionWorker(threading.Thread):
 
     def run(self):
         logger.info(
-            "[DETECT] Worker started for %s @ %.1f FPS",
+            "[DETECT] Minimal worker started for %s @ %.1f FPS",
             self.cam_id,
             1.0 / self.interval,
         )
@@ -58,54 +56,44 @@ class DetectionWorker(threading.Thread):
                 continue
 
             try:
-                results = self.model(
-                    frame,
-                    conf=self.conf,
-                    verbose=False,
-                )
+                h, w = frame.shape[:2]
 
-                vehicles = []
-                plates = []
+                # -------------------------------------------------
+                # Fake plate proposal (center-lower crop)
+                # -------------------------------------------------
+                x1 = int(0.30 * w)
+                x2 = int(0.70 * w)
+                y1 = int(0.55 * h)
+                y2 = int(0.75 * h)
 
-                for r in results:
-                    if r.boxes is None:
-                        continue
+                plate_crop = frame[y1:y2, x1:x2]
 
-                    for box in r.boxes:
-                        cls_id = int(box.cls[0])
-                        conf = float(box.conf[0])
+                plates = [{
+                    "bbox": (x1, y1, x2, y2),
+                    "conf": 1.0,
+                    "source": "fake",
+                }]
 
-                        x1, y1, x2, y2 = map(
-                            int, box.xyxy[0].tolist()
-                        )
+                vehicles = []  # intentionally empty in Step 1
 
-                        entry = {
-                            "bbox": (x1, y1, x2, y2),
-                            "conf": conf,
-                            "cls": cls_id,
-                        }
-
-                        # ---- COCO vehicle classes ----
-                        if cls_id in {2, 3, 5, 7}:  # car, moto, bus, truck
-                            vehicles.append(entry)
-
-                        # ---- License plate class (depends on model) ----
-                        if cls_id == 0:  # plate class (common)
-                            plates.append(entry)
-
+                # -------------------------------------------------
+                # Update detection manager (metadata only)
+                # -------------------------------------------------
                 self.detection_manager.update(
                     self.cam_id,
                     vehicles=vehicles,
                     plates=plates,
                 )
 
-                if plates:
-                    logger.info(
-                        "[DETECT] %s plates=%d vehicles=%d",
-                        self.cam_id,
-                        len(plates),
-                        len(vehicles),
-                    )
+                logger.info(
+                    "[DETECT] %s heartbeat | fake_plate=%dx%d",
+                    self.cam_id,
+                    plate_crop.shape[1],
+                    plate_crop.shape[0],
+                )
 
             except Exception:
-                logger.exception("[DETECT] Crash on %s", self.cam_id)
+                logger.exception(
+                    "[DETECT] Crash in minimal worker on %s",
+                    self.cam_id,
+                )
