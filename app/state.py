@@ -11,7 +11,7 @@ for p in sys.path:
     print("   -", p)
 print(">>> ================================\n")
 
-from app.cameras.frame_hub import FrameHub
+from app.frames.frame_hub import FrameHub
 
 
 class AppState:
