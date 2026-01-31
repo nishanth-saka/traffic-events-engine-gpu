@@ -1,5 +1,19 @@
 # app/config.py
 
+import os
+import sys
+
+print("\n>>> LOADING app.config")
+print(">>> app.config __file__:", __file__)
+print(">>> CWD:", os.getcwd())
+print(">>> sys.path:")
+for p in sys.path:
+    print("   -", p)
+print(">>> ENV PYTHONPATH:", os.getenv("PYTHONPATH"))
+print(">>> ================================\n")
+
+# app/config.py
+
 """
 Central application configuration.
 

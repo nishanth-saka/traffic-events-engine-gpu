@@ -1,68 +1,111 @@
 # app/main.py
 
+# =================================================
+# 🔥 PHASE 1 — FORENSIC PYTHON STARTUP LOGGING
+# =================================================
 import os
+import sys
+
+print("\n========== PYTHON STARTUP DEBUG ==========")
+print("CWD:", os.getcwd())
+print("__file__:", __file__)
+print("sys.executable:", sys.executable)
+print("sys.argv:", sys.argv)
+
+print("\n--- sys.path ---")
+for p in sys.path:
+    print("  -", p)
+
+print("\n--- Filesystem probes ---")
+for path in ["/", "/app", "/app/app"]:
+    try:
+        print(f"ls {path} ->", os.listdir(path))
+    except Exception as e:
+        print(f"ls {path} FAILED:", repr(e))
+
+print("\n--- Import sanity checks ---")
+try:
+    import app
+    print("✅ import app SUCCESS:", app)
+    print("   app.__file__:", getattr(app, "__file__", None))
+except Exception as e:
+    print("❌ import app FAILED:", repr(e))
+
+print("==========================================\n")
+# =================================================
+
+
+# =================================================
+# Normal imports START HERE (guarded)
+# =================================================
 import time
 import uuid
 import logging
-
 from fastapi import FastAPI
 
-from app.config import CAMERAS
-from app.state import app_state
-from app.ingest.rtsp.launcher import RTSPLauncher
+# ---- Guarded import: app.config ----
+try:
+    from app.config import CAMERAS
+    print("✅ from app.config import CAMERAS SUCCESS")
+except Exception as e:
+    print("🔥 FAILED importing app.config")
+    print("Exception:", repr(e))
+    raise
 
-# ---- Stage-3 Lite imports ----
+# ---- Guarded import: app.state ----
+try:
+    from app.state import app_state
+    print("✅ from app.state import app_state SUCCESS")
+except Exception as e:
+    print("🔥 FAILED importing app.state")
+    print("Exception:", repr(e))
+    raise
+
+# ---- RTSP + Detection imports ----
+from app.ingest.rtsp.launcher import RTSPLauncher
 from ultralytics import YOLO
 from app.detection.detection_manager import DetectionManager
 from app.detection.detection_worker import DetectionWorker
 
-# -------------------------------------------------
-# Logging
-# -------------------------------------------------
 
+# =================================================
+# Logging setup
+# =================================================
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# -------------------------------------------------
-# FastAPI app
-# -------------------------------------------------
 
+# =================================================
+# FastAPI app
+# =================================================
 app = FastAPI(title="Traffic Events Engine")
 
-# -------------------------------------------------
+
+# =================================================
 # Core runtime objects
-# -------------------------------------------------
-
-# RTSP launcher (Stage-2)
+# =================================================
 rtsp_launcher = RTSPLauncher(app_state.frame_hub)
-
-# Detection manager (Stage-3 Lite)
 app_state.detection_manager = DetectionManager()
-
-# Track process start time (optional health checks)
 APP_START_TIME = time.time()
 
-# -------------------------------------------------
-# Startup
-# -------------------------------------------------
 
+# =================================================
+# Startup
+# =================================================
 @app.on_event("startup")
 def startup():
-    # 🔥 Railway-safe startup probe (cold boot indicator)
     boot_id = str(uuid.uuid4())[:8]
-    start_ts = time.strftime("%Y-%m-%d %H:%M:%S")
 
     logger.warning(
-        "🔥 STARTUP PROBE 🔥 | boot_id=%s | ts=%s | pid=%s | railway_env=%s",
+        "🔥 STARTUP PROBE 🔥 | boot_id=%s | pid=%s | cwd=%s | PYTHONPATH=%s",
         boot_id,
-        start_ts,
         os.getpid(),
-        os.getenv("RAILWAY_ENVIRONMENT"),
+        os.getcwd(),
+        os.getenv("PYTHONPATH"),
     )
 
-    logger.info("[Startup] Registering cameras (Stage-1 / Single MAIN stream)")
+    logger.info("[Startup] Registering cameras")
 
-    # ---- RTSP startup ----
     for cam_id, cfg in CAMERAS.items():
         if "main_rtsp_url" not in cfg:
             raise RuntimeError(
@@ -74,15 +117,9 @@ def startup():
             rtsp_url=cfg["main_rtsp_url"],
         )
 
-        logger.info(
-            "[Startup] Camera %s: MAIN stream registered",
-            cam_id,
-        )
+        logger.info("[Startup] Camera %s registered", cam_id)
 
-    # ---- Stage-3 Lite: Detection ----
-    logger.info("[Startup] Starting Stage-3 Lite detection workers")
-
-    # Load YOLO once (shared by all workers)
+    logger.info("[Startup] Loading YOLO model")
     yolo_model = YOLO("yolov8n.pt")
 
     for cam_id in CAMERAS.keys():
@@ -96,17 +133,13 @@ def startup():
         )
         worker.start()
 
-        logger.info(
-            "[Startup] Detection worker started for %s",
-            cam_id,
-        )
+        logger.info("[Startup] Detection worker started for %s", cam_id)
 
     logger.info("[Startup] Startup complete")
 
-# -------------------------------------------------
+
+# =================================================
 # Routes
-# -------------------------------------------------
-
+# =================================================
 from app.routes import preview  # noqa: E402
-
 app.include_router(preview.router)
