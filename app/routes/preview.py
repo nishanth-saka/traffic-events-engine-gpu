@@ -2,22 +2,21 @@
 
 import time
 import cv2
-
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-from app.state import app_state
+from app.main import rtsp_launcher
 
 router = APIRouter(prefix="/preview")
 
 
 @router.get("/stream/{cam_id}")
 def preview(cam_id: str):
-    if not app_state.rtsp_launcher.has_camera(cam_id):
-        raise HTTPException(status_code=404, detail="Camera not found")
+    if not rtsp_launcher.has_camera(cam_id):
+        raise HTTPException(404, "Camera not found")
 
     def gen():
         while True:
-            frame = app_state.rtsp_launcher.get_latest_frame(cam_id)
+            frame = rtsp_launcher.get_latest_frame(cam_id)
             if frame is None:
                 time.sleep(0.05)
                 continue
