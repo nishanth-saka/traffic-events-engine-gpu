@@ -3,7 +3,7 @@
 import logging
 from ultralytics import YOLO
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("DETECTION")
 
 # Load once at import (correct)
 _model = YOLO("yolov8n.pt")
