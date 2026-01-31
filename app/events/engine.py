@@ -25,45 +25,38 @@ class EventsEngine:
         self.detection_manager = detection_manager
 
     def process_camera(self, cam_id: str) -> List[Dict]:
-        """
-        Process one camera's detections and emit events.
-
-        Returns:
-            List of event dicts
-        """
-
-        # -------------------------------------------------
-        # Step 4: consume detections
-        # -------------------------------------------------
-        detections = self.detection_manager.get(cam_id)
-
-        logger.info(
-            "[TRACE][%s] Event engine received %d detections",
-            cam_id,
-            len(detections),
-        )
-
-        events: List[Dict] = []
-
-        # -------------------------------------------------
-        # Step 5: emit events
-        # -------------------------------------------------
-        for d in detections:
-            event = {
-                "type": "vehicle_detected",
-                "cam_id": cam_id,
-                "class": d["class"],
-                "confidence": d["confidence"],
-                "bbox": d["bbox"],
-                "ts": time.time(),
-            }
-
-            events.append(event)
+        try:
+            detections = self.detection_manager.get(cam_id)
 
             logger.info(
-                "[TRACE][%s] Event emitted: %s",
+                "[TRACE][%s] Event engine received %d detections",
                 cam_id,
-                event["type"],
+                len(detections),
             )
 
-        return events
+            events: List[Dict] = []
+
+            for d in detections:
+                event = {
+                    "type": "vehicle_detected",
+                    "cam_id": cam_id,
+                    "class": d["class"],
+                    "confidence": d["confidence"],
+                    "bbox": d["bbox"],
+                    "ts": time.time(),
+                }
+
+                events.append(event)
+
+                logger.info(
+                    "[TRACE][%s] Event emitted: %s",
+                    cam_id,
+                    event["type"],
+                )
+
+            return events
+
+        except Exception:
+            logger.exception("[EVENTS] Failed processing cam %s", cam_id)
+            return []
+
