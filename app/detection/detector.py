@@ -1,9 +1,6 @@
-# app/detection/detector.py
-
 import time
 import threading
 import logging
-import numpy as np
 
 logger = logging.getLogger("DetectionWorker")
 
@@ -58,9 +55,9 @@ class DetectionWorker(threading.Thread):
             try:
                 h, w = frame.shape[:2]
 
-                # -------------------------------------------------
+                # ---------------------------------------------
                 # Fake plate proposal (center-lower crop)
-                # -------------------------------------------------
+                # ---------------------------------------------
                 x1 = int(0.30 * w)
                 x2 = int(0.70 * w)
                 y1 = int(0.55 * h)
@@ -74,11 +71,11 @@ class DetectionWorker(threading.Thread):
                     "source": "fake",
                 }]
 
-                vehicles = []  # intentionally empty in Step 1
+                vehicles = []
 
-                # -------------------------------------------------
-                # Update detection manager (metadata only)
-                # -------------------------------------------------
+                # ---------------------------------------------
+                # Publish metadata only
+                # ---------------------------------------------
                 self.detection_manager.update(
                     self.cam_id,
                     vehicles=vehicles,

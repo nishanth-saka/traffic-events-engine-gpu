@@ -1,8 +1,5 @@
-# app/main.py
-
 # =================================================
 # 🔥 PHASE 1 — FORENSIC PYTHON STARTUP LOGGING
-# (SAFE: no app imports, no subprocess, no RTSP)
 # =================================================
 import os
 import sys
@@ -35,7 +32,7 @@ except Exception as e:
 print("==========================================\n")
 
 # =================================================
-# NORMAL IMPORTS (SAFE ZONE)
+# NORMAL IMPORTS
 # =================================================
 import uuid
 import logging
@@ -45,7 +42,7 @@ from app.config import CAMERAS
 from app.shared import app_state
 
 # =================================================
-# LOGGING SETUP (Railway-visible)
+# LOGGING SETUP
 # =================================================
 logging.basicConfig(
     level=logging.INFO,
@@ -78,7 +75,7 @@ def startup():
     )
 
     # -------------------------------
-    # FrameHub init (lightweight)
+    # FrameHub init
     # -------------------------------
     from app.frames.frame_hub import FrameHub
 
@@ -112,10 +109,34 @@ def startup():
         )
 
     logger.warning("[Startup] RTSP SUB ingestion started")
+
+    # -------------------------------
+    # Detection Manager + Worker(s)
+    # -------------------------------
+    from app.detection.detection_manager import DetectionManager
+    from app.detection.detector import DetectionWorker
+
+    detection_manager = DetectionManager()
+    app_state.detection_manager = detection_manager
+
+    for cam_id in CAMERAS.keys():
+        worker = DetectionWorker(
+            cam_id=cam_id,
+            frame_hub=frame_hub,          # MAIN frames
+            detection_manager=detection_manager,
+            fps=2,
+        )
+        worker.start()
+
+        logger.warning(
+            "[Startup] DetectionWorker started for %s",
+            cam_id,
+        )
+
     logger.warning("[Startup] Minimal startup COMPLETE")
 
 # =================================================
-# ROUTES (imported AFTER app + logging)
+# ROUTES
 # =================================================
 from app.routes import preview  # noqa: E402
 from app.routes import debug_rtsp  # noqa: E402
@@ -124,7 +145,6 @@ app.include_router(preview.router)
 app.include_router(debug_rtsp.router)
 
 # =================================================
-# NOTE:
-# Railway uses: uvicorn app.main:app
-# __main__ block is NOT relied upon
+# Railway entrypoint:
+#   uvicorn app.main:app
 # =================================================
