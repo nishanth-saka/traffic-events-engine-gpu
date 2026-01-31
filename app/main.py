@@ -6,6 +6,9 @@ from fastapi import FastAPI
 import app.config as config
 from app.state import app_state
 
+import app.state
+print("STATE FILE:", app.state.__file__)
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
