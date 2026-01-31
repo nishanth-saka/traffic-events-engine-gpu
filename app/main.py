@@ -2,6 +2,7 @@
 
 # =================================================
 # 🔥 PHASE 1 — FORENSIC PYTHON STARTUP LOGGING
+# (SAFE: no app imports, no subprocess, no RTSP)
 # =================================================
 import os
 import sys
@@ -32,11 +33,9 @@ except Exception as e:
     print("❌ import app FAILED:", repr(e))
 
 print("==========================================\n")
-# =================================================
-
 
 # =================================================
-# Normal imports START HERE
+# NORMAL IMPORTS (SAFE ZONE)
 # =================================================
 import uuid
 import logging
@@ -45,26 +44,25 @@ from fastapi import FastAPI
 from app.config import CAMERAS
 from app.shared import app_state
 
-
 # =================================================
-# Logging setup
+# LOGGING SETUP (Railway-visible)
 # =================================================
 logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    force=True,
 )
-logger = logging.getLogger(__name__)
-logger.debug("Logging initialized successfully.")
 
+logger = logging.getLogger("app.main")
+logger.warning("🔥 Logging initialized (import phase)")
 
 # =================================================
-# FastAPI app
+# FASTAPI APP
 # =================================================
 app = FastAPI(title="Traffic Events Engine")
 
-
 # =================================================
-# Startup — RUNTIME WIRING ONLY
+# STARTUP — RUNTIME WIRING ONLY
 # =================================================
 @app.on_event("startup")
 def startup():
@@ -80,23 +78,20 @@ def startup():
     )
 
     # -------------------------------
-    # Initialize FrameHub (ONCE)
+    # FrameHub init (lightweight)
     # -------------------------------
     from app.frames.frame_hub import FrameHub
 
     frame_hub = FrameHub()
     app_state.frame_hub = frame_hub
 
-    # -------------------------------
-    # Register cameras
-    # -------------------------------
     for cam_id in CAMERAS.keys():
         frame_hub.register(cam_id)
 
-    logger.info("[Startup] FrameHub initialized and cameras registered")
+    logger.info("[Startup] FrameHub initialized & cameras registered")
 
     # -------------------------------
-    # RTSP ingestion via RTSPLauncher (Phase 2)
+    # RTSP ingestion (SUB only)
     # -------------------------------
     from app.ingest.rtsp.launcher import RTSPLauncher
 
@@ -106,41 +101,30 @@ def startup():
     for cam_id, cam_cfg in CAMERAS.items():
         if "sub" not in cam_cfg:
             logger.warning(
-                "[Startup] Camera '%s' configuration missing 'sub' key. Skipping.",
+                "[Startup] Camera '%s' missing 'sub' stream, skipping",
                 cam_id,
             )
             continue
 
         rtsp_launcher.add_camera(
             cam_id=cam_id,
-            rtsp_url=cam_cfg["sub"],  # 🔒 explicit SUB stream
+            rtsp_url=cam_cfg["sub"],  # 🔒 SUB stream ONLY
         )
 
-    logger.info("[Startup] RTSP ingestion started via RTSPLauncher")
-    logger.info("[Startup] Minimal startup complete (DEBUG MODE)")
-
+    logger.warning("[Startup] RTSP SUB ingestion started")
+    logger.warning("[Startup] Minimal startup COMPLETE")
 
 # =================================================
-# Routes
+# ROUTES (imported AFTER app + logging)
 # =================================================
 from app.routes import preview  # noqa: E402
+from app.routes import debug_rtsp  # noqa: E402
 
 app.include_router(preview.router)
-
+app.include_router(debug_rtsp.router)
 
 # =================================================
-# HARD ENTRYPOINT (Railway-safe)
+# NOTE:
+# Railway uses: uvicorn app.main:app
+# __main__ block is NOT relied upon
 # =================================================
-if __name__ == "__main__":
-    import uvicorn
-
-    print("🔥 __main__ ENTRYPOINT HIT")
-    print("PORT =", os.environ.get("PORT"))
-
-    uvicorn.run(
-        "app.main:app",
-        host="0.0.0.0",
-        port=int(os.environ["PORT"]),
-        log_level="info",
-        access_log=True,
-    )
