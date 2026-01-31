@@ -1,3 +1,5 @@
+print("🧠 state.py LOADED FROM:", __file__)
+
 # app/state.py
 
 import os
