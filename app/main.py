@@ -54,7 +54,7 @@ except Exception as e:
 
 # ---- Guarded import: app.state ----
 try:
-    from app.state import app_state
+    from app.shared import app_state
     print("✅ from app.state import app_state SUCCESS")
 except Exception as e:
     print("🔥 FAILED importing app.state")
