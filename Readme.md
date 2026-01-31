@@ -10,3 +10,7 @@ curl -X POST \
 
   curl https://traffic-events-engine-production.up.railway.app/debug/pipeline
 
+  ffmpeg -rtsp_transport tcp \
+  -i "rtsp://admin:Admin%40123@103.88.236.191:10554/cam/realmonitor?channel=1&subtype=0" \
+  -f null -
+
