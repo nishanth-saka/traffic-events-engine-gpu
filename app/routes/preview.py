@@ -4,7 +4,7 @@ import time
 import logging
 import cv2
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from fastapi.responses import StreamingResponse, Response
 
 from app.state import app_state
@@ -18,19 +18,19 @@ router = APIRouter(prefix="/preview", tags=["preview"])
 def mjpeg_preview(cam_id: str):
     frame_hub = app_state.frame_hub
 
-    # 1️⃣ Camera must be known
-    if not frame_hub.has_camera(cam_id):
-        raise HTTPException(status_code=404, detail="Camera not found")
-
     def frame_generator():
         target_fps = 10.0
         min_interval = 1.0 / target_fps
         last_sent = 0.0
 
         while True:
-            frame = frame_hub.get_latest_frame(cam_id)
+            try:
+                frame = frame_hub.get_latest_frame(cam_id)
+            except Exception as e:
+                logger.exception("FrameHub error for %s", cam_id)
+                return
 
-            # 2️⃣ Camera exists but no frames yet → just wait
+            # No frames yet → just wait
             if frame is None:
                 time.sleep(0.05)
                 continue
@@ -49,7 +49,6 @@ def mjpeg_preview(cam_id: str):
             )
 
             if not success:
-                logger.warning("JPEG encode failed for %s", cam_id)
                 continue
 
             yield (
@@ -59,8 +58,10 @@ def mjpeg_preview(cam_id: str):
                 + b"\r\n"
             )
 
-    # 3️⃣ If camera exists but never produced frames yet,
-    # StreamingResponse will idle safely (no 500s)
+    # IMPORTANT:
+    # - No camera existence check
+    # - No exceptions raised
+    # - Always returns a valid response
     return StreamingResponse(
         frame_generator(),
         media_type="multipart/x-mixed-replace; boundary=frame",
