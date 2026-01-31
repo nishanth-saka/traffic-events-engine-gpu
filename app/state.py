@@ -1,7 +1,9 @@
 # app/state.py
 
+print("### LOADED STATE.PY FROM:", __file__)
+print("### STATE.PY HASH CHECK: STAGE2_SINGLE_MAIN")
+
 import threading
-import time
 from typing import Dict
 
 from app.ingest.rtsp.reader import RTSPReader
@@ -64,7 +66,7 @@ class AppState:
         reader = RTSPReader(
             cam_id=cam_id,
             rtsp_url=rtsp_url,
-            frame_store=self.frame_hub,  # 🔑 same hub for all consumers
+            frame_store=self.frame_hub,  # MAIN hub
         )
 
         reader.start()
