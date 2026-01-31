@@ -1,5 +1,5 @@
 # app/main.py
-
+raise RuntimeError("🔥 CACHE BUST TEST: main.py executed")
 print("### LOADED MAIN.PY FROM:", __file__)
 
 import logging
