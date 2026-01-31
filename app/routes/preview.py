@@ -1,13 +1,11 @@
-# app/routes/preview.py
-
 import time
 import logging
-
 import cv2
-from fastapi import APIRouter
+
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
-from app.state import app_state
+from app.shared import app_state
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +16,9 @@ router = APIRouter(prefix="/preview", tags=["preview"])
 def mjpeg_preview(cam_id: str):
     frame_hub = app_state.frame_hub
 
+    if frame_hub is None:
+        raise HTTPException(status_code=503, detail="Frame hub not ready")
+
     def frame_generator():
         target_fps = 10.0
         min_interval = 1.0 / target_fps
@@ -26,7 +27,7 @@ def mjpeg_preview(cam_id: str):
         logger.warning("[MJPEG] generator started for %s", cam_id)
 
         while True:
-            frame = frame_hub.latest(cam_id)  # ✅ FIXED
+            frame = frame_hub.get_latest_frame(cam_id)
 
             if frame is None:
                 time.sleep(0.05)

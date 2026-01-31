@@ -1,13 +1,12 @@
 # app/shared.py
 
-# Initialize app_state here to avoid circular imports
 class AppState:
     def __init__(self):
-        self.frame_hub = None  # Example attribute
-        self.detection_manager = None  # Example attribute
+        # Filled during FastAPI startup
+        self.frame_hub = None
+        self.detection_manager = None
 
-# Create a global instance of AppState
+# 🔒 Singleton: created exactly once, at import time
 app_state = AppState()
 
-# Export app_state for shared usage
 __all__ = ["app_state"]
