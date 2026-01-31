@@ -1,14 +1,11 @@
---extra-index-url https://download.pytorch.org/whl/cpu
-
 fastapi
 uvicorn
-python-multipart
-
 numpy<2
 opencv-python-headless==4.9.0.80
 imageio-ffmpeg
 
-# ML-related dependencies
 torch==2.1.0+cpu
 torchvision==0.16.0+cpu
+--extra-index-url https://download.pytorch.org/whl/cpu
+
 ultralytics

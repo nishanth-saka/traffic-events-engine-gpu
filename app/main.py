@@ -75,7 +75,7 @@ def startup():
     )
 
     # -------------------------------
-    # FrameHub init
+    # FrameHub init (MAIN frames)
     # -------------------------------
     from app.frames.frame_hub import FrameHub
 
@@ -88,7 +88,7 @@ def startup():
     logger.info("[Startup] FrameHub initialized & cameras registered")
 
     # -------------------------------
-    # RTSP ingestion (SUB only)
+    # RTSP ingestion (SUB stream ONLY)
     # -------------------------------
     from app.ingest.rtsp.launcher import RTSPLauncher
 
@@ -105,13 +105,13 @@ def startup():
 
         rtsp_launcher.add_camera(
             cam_id=cam_id,
-            rtsp_url=cam_cfg["sub"],  # 🔒 SUB stream ONLY
+            rtsp_url=cam_cfg["sub"],  # 🔒 SUB stream only
         )
 
     logger.warning("[Startup] RTSP SUB ingestion started")
 
     # -------------------------------
-    # Detection Manager + Worker(s)
+    # Detection Manager + Workers
     # -------------------------------
     from app.detection.detection_manager import DetectionManager
     from app.detection.detector import DetectionWorker
@@ -133,7 +133,7 @@ def startup():
             cam_id,
         )
 
-    logger.warning("[Startup] Minimal startup COMPLETE")
+    logger.warning("[Startup] Stage-1 startup COMPLETE (vehicle detection live)")
 
 # =================================================
 # ROUTES

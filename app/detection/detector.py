@@ -2,18 +2,21 @@ import time
 import threading
 import logging
 
+from app.detection.vehicle_detector import detect_vehicles
+
 logger = logging.getLogger("DetectionWorker")
 
 
 class DetectionWorker(threading.Thread):
     """
-    Minimal FPS-controlled detection worker (NO ML).
+    Stage-1 FPS-controlled detection worker (REAL VEHICLE DETECTION).
 
     Guarantees:
     - Pulls ONLY latest frame from FrameHub (MAIN stream)
     - Drops frames by design
     - Runs at low, controlled FPS
-    - Proves MAIN → detection pipeline is alive
+    - Publishes VEHICLE METADATA ONLY
+    - NO plates, NO OCR, NO ANPR yet
     """
 
     def __init__(
@@ -35,7 +38,7 @@ class DetectionWorker(threading.Thread):
 
     def run(self):
         logger.info(
-            "[DETECT] Minimal worker started for %s @ %.1f FPS",
+            "[DETECT] Vehicle worker started for %s @ %.1f FPS",
             self.cam_id,
             1.0 / self.interval,
         )
@@ -53,44 +56,25 @@ class DetectionWorker(threading.Thread):
                 continue
 
             try:
-                h, w = frame.shape[:2]
+                vehicles = detect_vehicles(frame)
 
                 # ---------------------------------------------
-                # Fake plate proposal (center-lower crop)
-                # ---------------------------------------------
-                x1 = int(0.30 * w)
-                x2 = int(0.70 * w)
-                y1 = int(0.55 * h)
-                y2 = int(0.75 * h)
-
-                plate_crop = frame[y1:y2, x1:x2]
-
-                plates = [{
-                    "bbox": (x1, y1, x2, y2),
-                    "conf": 1.0,
-                    "source": "fake",
-                }]
-
-                vehicles = []
-
-                # ---------------------------------------------
-                # Publish metadata only
+                # Publish metadata ONLY
                 # ---------------------------------------------
                 self.detection_manager.update(
                     self.cam_id,
                     vehicles=vehicles,
-                    plates=plates,
+                    plates=[],   # 🔒 plates intentionally empty in Stage-1
                 )
 
                 logger.info(
-                    "[DETECT] %s heartbeat | fake_plate=%dx%d",
+                    "[DETECT] %s heartbeat | vehicles=%d",
                     self.cam_id,
-                    plate_crop.shape[1],
-                    plate_crop.shape[0],
+                    len(vehicles),
                 )
 
             except Exception:
                 logger.exception(
-                    "[DETECT] Crash in minimal worker on %s",
+                    "[DETECT] Crash in vehicle detection on %s",
                     self.cam_id,
                 )
