@@ -9,6 +9,9 @@ from app.ingest.frame.logger import (
 )
 from app.ingest.frame.ocr import run_ocr
 
+# 🔥 STEP-2: plate debug dump
+from app.ingest.frame.debug_dump import maybe_dump_plate_crop
+
 logger = logging.getLogger(__name__)
 
 
@@ -55,6 +58,19 @@ def run_frame_pipeline(*, camera_id, frame_ts, frame, vehicles):
 
         log_plate_summary(camera_id, idx, len(plates))
         log_plate_candidates(camera_id, idx, plates)
+
+        # ============================================
+        # ✅ STEP-2 — DUMP ONE PLATE CROP (THROTTLED)
+        # ============================================
+        if plates:
+            bbox = plates[0].get("bbox")
+            if bbox is not None:
+                maybe_dump_plate_crop(
+                    cam_id=camera_id,
+                    frame_ts=frame_ts,
+                    vehicle_crop=vehicle.crop,
+                    bbox=bbox,
+                )
 
         # ============================================
         # 🔥 STEP 1 — FORCE OCR (CALIBRATION MODE)
