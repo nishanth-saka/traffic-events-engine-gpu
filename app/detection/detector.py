@@ -66,6 +66,7 @@ class DetectionWorker(threading.Thread):
                     camera_id=self.cam_id,
                     frame_ts=now,
                     frame=frame,
+                    vehicles=vehicles,
                     frame_store=None,   # not used; safe placeholder
                 )
             except Exception:
