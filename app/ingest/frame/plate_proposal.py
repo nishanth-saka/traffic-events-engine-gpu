@@ -91,6 +91,7 @@ def propose_plate_regions(
 
         candidates.append({
             "bbox": [x, y, x + cw, y + ch],
+            "crop": crop,  # 🔥 THIS IS THE FIX
             "area_ratio": round(area_ratio, 4),
             "aspect": round(aspect, 2),
             "blur": round(blur, 1),
