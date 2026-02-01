@@ -86,6 +86,13 @@ def startup():
         frame_hub.register(cam_id)
 
     logger.info("[Startup] FrameHub initialized & cameras registered")
+    
+    from fastapi.staticfiles import StaticFiles
+    app.mount(
+        "/debug/plates",
+        StaticFiles(directory="/tmp/plate_debug"),
+        name="plate_debug",
+    )
 
     # -------------------------------
     # RTSP ingestion (SUB stream ONLY)
