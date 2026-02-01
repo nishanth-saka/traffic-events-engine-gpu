@@ -5,7 +5,7 @@ import threading
 import logging
 
 from app.detection.vehicle_detector import detect_vehicles
-from app.ingest.frame.pipeline import process_frame   # ✅ ADDED
+from app.ingest.frame.pipeline import process_frame
 
 logger = logging.getLogger("DetectionWorker")
 
@@ -58,33 +58,19 @@ class DetectionWorker(threading.Thread):
             if frame is None:
                 continue
 
-            # -------------------------------------------------
-            # Phase-A ANPR pipeline (SIDE-EFFECT ONLY)
-            # -------------------------------------------------
             try:
-                process_frame(
-                    camera_id=self.cam_id,
-                    frame_ts=now,
-                    frame=frame,
-                    vehicles=vehicles,
-                    frame_store=None,   # not used; safe placeholder
-                )
-            except Exception:
-                logger.exception(
-                    "[ANPR] Crash in Phase-A pipeline on %s",
-                    self.cam_id,
-                )
-
-            try:
+                # ---------------------------------------------
+                # 1️⃣ Vehicle detection
+                # ---------------------------------------------
                 vehicles = detect_vehicles(frame)
 
                 # ---------------------------------------------
-                # Publish VEHICLE metadata ONLY
+                # 2️⃣ Publish VEHICLE metadata ONLY
                 # ---------------------------------------------
                 self.detection_manager.update(
                     self.cam_id,
                     vehicles=vehicles,
-                    plates=[],   # 🔒 plates intentionally empty here
+                    plates=[],   # 🔒 plates intentionally empty
                 )
 
                 logger.info(
@@ -93,8 +79,19 @@ class DetectionWorker(threading.Thread):
                     len(vehicles),
                 )
 
+                # ---------------------------------------------
+                # 3️⃣ Phase-A ANPR pipeline (SIDE-EFFECT ONLY)
+                # ---------------------------------------------
+                process_frame(
+                    camera_id=self.cam_id,
+                    frame_ts=now,
+                    frame=frame,
+                    vehicles=vehicles,
+                    frame_store=None,   # safe placeholder
+                )
+
             except Exception:
                 logger.exception(
-                    "[DETECT] Crash in vehicle detection on %s",
+                    "[DETECT] Crash in detection pipeline on %s",
                     self.cam_id,
                 )
