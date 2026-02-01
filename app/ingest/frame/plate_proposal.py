@@ -1,10 +1,13 @@
-# app/ingest/frame/plate_proposal.py
-
 import cv2
 import numpy as np
 from typing import List, Dict
 
 from app.ingest.frame.policy import DEFAULT_PLATE_POLICY, PlateProposalPolicy
+
+# -------------------------------------------------
+# Gate-2 calibration toggle
+# -------------------------------------------------
+GATE2_CALIBRATION_MODE = True
 
 
 def propose_plate_regions(
@@ -15,7 +18,7 @@ def propose_plate_regions(
     Propose license plate candidate regions from a vehicle crop.
 
     Gate-2 behavior:
-    - Geometry & size are gated by policy
+    - Geometry & size are gated by policy (loosened in calibration mode)
     - Blur & skew are COMPUTED, not filtered (metrics only)
 
     Returns:
@@ -26,6 +29,8 @@ def propose_plate_regions(
         return []
 
     h, w = vehicle_crop.shape[:2]
+
+    # Vehicle crop sanity
     if h < 40 or w < 80:
         return []
 
@@ -46,17 +51,37 @@ def propose_plate_regions(
     for cnt in contours:
         x, y, cw, ch = cv2.boundingRect(cnt)
 
-        # --- Absolute size guardrails ---
-        if cw < policy.min_width or ch < policy.min_height:
+        # -------------------------------------------------
+        # Absolute size guardrails (loosened)
+        # -------------------------------------------------
+        min_w = policy.min_width
+        min_h = policy.min_height
+
+        if GATE2_CALIBRATION_MODE:
+            min_w = min(min_w, 40)
+            min_h = min(min_h, 14)
+
+        if cw < min_w or ch < min_h:
             continue
 
         aspect = cw / float(ch)
         area_ratio = (cw * ch) / float(w * h)
 
-        # --- Geometry constraints ---
-        if not (policy.min_aspect <= aspect <= policy.max_aspect):
+        # -------------------------------------------------
+        # Geometry constraints (loosened)
+        # -------------------------------------------------
+        min_aspect = policy.min_aspect
+        max_aspect = policy.max_aspect
+        min_area_ratio = policy.min_area_ratio
+
+        if GATE2_CALIBRATION_MODE:
+            min_aspect = 1.6
+            max_aspect = 8.5
+            min_area_ratio = min(min_area_ratio, 0.006)
+
+        if not (min_aspect <= aspect <= max_aspect):
             continue
-        if not (policy.min_area_ratio <= area_ratio <= policy.max_area_ratio):
+        if not (min_area_ratio <= area_ratio <= policy.max_area_ratio):
             continue
 
         crop = vehicle_crop[y:y + ch, x:x + cw]
