@@ -1,28 +1,16 @@
+# app/ingest/frame/plate_proposal.py
+
 import cv2
 import numpy as np
 from typing import List, Dict
 
-from app.ingest.frame.policy import DEFAULT_PLATE_POLICY, PlateProposalPolicy
 
-# -------------------------------------------------
-# Gate-2 calibration toggle
-# -------------------------------------------------
-GATE2_CALIBRATION_MODE = True
-
-
-def propose_plate_regions(
-    vehicle_crop: np.ndarray,
-    policy: PlateProposalPolicy = DEFAULT_PLATE_POLICY,
-) -> List[Dict]:
+def propose_plate_regions(vehicle_crop: np.ndarray) -> List[Dict]:
     """
-    Propose license plate candidate regions from a vehicle crop.
+    Gate-2: Plate proposal (CALIBRATION MODE – HIGH RECALL)
 
-    Gate-2 behavior:
-    - Geometry & size are gated by policy (loosened in calibration mode)
-    - Blur & skew are COMPUTED, not filtered (metrics only)
-
-    Returns:
-        List of dicts with bbox + quality metrics
+    Returns a list of candidate plate regions with metadata.
+    Does NOT guarantee correctness – OCR will decide later.
     """
 
     if vehicle_crop is None:
@@ -30,20 +18,28 @@ def propose_plate_regions(
 
     h, w = vehicle_crop.shape[:2]
 
-    # Vehicle crop sanity
+    # Vehicle too small → impossible plate
     if h < 40 or w < 80:
         return []
 
+    vehicle_area = h * w
+
+    # -------------------------------------------------
+    # Pre-processing
+    # -------------------------------------------------
     gray = cv2.cvtColor(vehicle_crop, cv2.COLOR_BGR2GRAY)
-    edges = cv2.Canny(gray, 100, 200)
+    gray = cv2.GaussianBlur(gray, (5, 5), 0)
 
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 3))
-    edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel)
+    edges = cv2.Canny(gray, 80, 160)
 
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+    edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel, iterations=1)
+
+    # -------------------------------------------------
+    # Contour detection
+    # -------------------------------------------------
     contours, _ = cv2.findContours(
-        edges,
-        cv2.RETR_EXTERNAL,
-        cv2.CHAIN_APPROX_SIMPLE,
+        edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
     )
 
     candidates: List[Dict] = []
@@ -51,70 +47,56 @@ def propose_plate_regions(
     for cnt in contours:
         x, y, cw, ch = cv2.boundingRect(cnt)
 
-        # -------------------------------------------------
-        # Absolute size guardrails (loosened)
-        # -------------------------------------------------
-        min_w = policy.min_width
-        min_h = policy.min_height
-
-        if GATE2_CALIBRATION_MODE:
-            min_w = min(min_w, 40)
-            min_h = min(min_h, 14)
-
-        if cw < min_w or ch < min_h:
+        if cw < 20 or ch < 10:
             continue
 
-        aspect = cw / float(ch)
-        area_ratio = (cw * ch) / float(w * h)
+        area = cw * ch
+        area_ratio = area / float(vehicle_area)
 
         # -------------------------------------------------
-        # Geometry constraints (loosened)
+        # 🔧 Gate-2 loosened thresholds (CALIBRATION)
         # -------------------------------------------------
-        min_aspect = policy.min_aspect
-        max_aspect = policy.max_aspect
-        min_area_ratio = policy.min_area_ratio
 
-        if GATE2_CALIBRATION_MODE:
-            min_aspect = 1.6
-            max_aspect = 8.5
-            min_area_ratio = min(min_area_ratio, 0.006)
-
-        if not (min_aspect <= aspect <= max_aspect):
-            continue
-        if not (min_area_ratio <= area_ratio <= policy.max_area_ratio):
+        # Plate area: allow small plates
+        if area_ratio < 0.008 or area_ratio > 0.20:
             continue
 
-        crop = vehicle_crop[y:y + ch, x:x + cw]
+        aspect_ratio = cw / float(ch)
 
-        blur = _blur_score(crop)
-        skew = _skew_angle(cnt)
+        # Indian plates + perspective skew
+        if aspect_ratio < 1.8 or aspect_ratio > 6.0:
+            continue
 
-        candidates.append({
-            "bbox": [x, y, x + cw, y + ch],
-            "crop": crop,  # 🔥 THIS IS THE FIX
-            "area_ratio": round(area_ratio, 4),
-            "aspect": round(aspect, 2),
-            "blur": round(blur, 1),
-            "skew": round(skew, 1),
-        })
+        # Edge density (blur tolerant)
+        roi_edges = edges[y:y + ch, x:x + cw]
+        edge_pixels = np.count_nonzero(roi_edges)
+        edge_density = edge_pixels / float(area)
 
-    return candidates
+        if edge_density < 0.05:
+            continue
 
+        # Brightness sanity (soft gate)
+        roi_gray = gray[y:y + ch, x:x + cw]
+        mean_intensity = float(np.mean(roi_gray))
 
-# -------------------------------------------------
-# Metrics helpers
-# -------------------------------------------------
+        if mean_intensity < 35 or mean_intensity > 235:
+            continue
 
-def _blur_score(img: np.ndarray) -> float:
-    """Variance of Laplacian (higher = sharper)."""
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    return cv2.Laplacian(gray, cv2.CV_64F).var()
+        # -------------------------------------------------
+        # Candidate accepted
+        # -------------------------------------------------
+        candidates.append(
+            {
+                "bbox": (x, y, cw, ch),
+                "area_ratio": round(area_ratio, 4),
+                "aspect_ratio": round(aspect_ratio, 2),
+                "edge_density": round(edge_density, 3),
+                "mean_intensity": round(mean_intensity, 1),
+            }
+        )
 
+    # Prefer plate-like shapes (wider first)
+    candidates.sort(key=lambda c: c["aspect_ratio"], reverse=True)
 
-def _skew_angle(cnt) -> float:
-    """Absolute skew angle from minimum-area rectangle."""
-    rect = cv2.minAreaRect(cnt)
-    angle = rect[-1]
-    if angle < -45:
-        angle = 90 + angle
-    return abs(angle)
+    # Hard cap – avoid OCR explosion
+    return candidates[:3]
