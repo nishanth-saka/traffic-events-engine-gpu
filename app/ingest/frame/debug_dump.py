@@ -25,10 +25,6 @@ def maybe_dump_plate_crop(
 ):
     """
     Dump ONE OCR-correlated plate debug image (throttled per camera).
-
-    Image layout:
-    - Top: vehicle crop with plate bbox
-    - Bottom: plate crop (upsized)
     """
 
     if vehicle_crop is None or plate_crop is None or bbox is None:
@@ -46,15 +42,9 @@ def maybe_dump_plate_crop(
         # Draw bbox on vehicle crop
         vis = vehicle_crop.copy()
         x1, y1, x2, y2 = bbox
-        cv2.rectangle(
-            vis,
-            (x1, y1),
-            (x2, y2),
-            (0, 255, 0),
-            2,
-        )
+        cv2.rectangle(vis, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
-        # Resize plate crop to vehicle width for readability
+        # Upscale plate crop for readability
         plate_vis = cv2.resize(
             plate_crop,
             (vis.shape[1], plate_crop.shape[0]),
@@ -91,3 +81,4 @@ def maybe_dump_plate_crop(
             plate_idx,
             e,
         )
+
