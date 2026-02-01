@@ -45,24 +45,27 @@ from app.config import CAMERAS
 from app.shared import app_state
 
 # =================================================
-# LOGGING SETUP (GLOBAL, BOOT-ID AWARE)
+# LOGGING SETUP (GLOBAL, BOOT-ID SAFE)
 # =================================================
 BOOT_ID = str(uuid.uuid4())[:8]
 
+# 🔑 GUARANTEE boot_id exists on *every* LogRecord
+_old_factory = logging.getLogRecordFactory()
 
-class BootIdFilter(logging.Filter):
-    def filter(self, record: logging.LogRecord) -> bool:
-        record.boot_id = BOOT_ID
-        return True
 
+def record_factory(*args, **kwargs):
+    record = _old_factory(*args, **kwargs)
+    record.boot_id = BOOT_ID
+    return record
+
+
+logging.setLogRecordFactory(record_factory)
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(name)s | boot=%(boot_id)s | %(message)s",
     force=True,
 )
-
-logging.getLogger().addFilter(BootIdFilter())
 
 logger = logging.getLogger("app.main")
 logger.warning("🔥 Logging initialized (boot_id=%s)", BOOT_ID)
