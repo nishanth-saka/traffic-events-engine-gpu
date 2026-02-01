@@ -8,7 +8,7 @@ from app.ingest.frame.logger import (
     log_plate_summary,
     log_plate_candidates,
 )
-from app.ingest.frame.ocr import run_ocr   # 🔥 ADD
+from app.ingest.frame.ocr import run_ocr
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ def run_frame_pipeline(*, camera_id, frame_ts, frame, vehicles):
     for idx, v in enumerate(vehicles):
         vehicle = Vehicle.from_detection(v, frame)
 
-        # 🔓 Gate-2 calibration policy (already correct)
+        # 🔓 Gate-2 calibration policy
         from app.ingest.frame.policy import CALIBRATION_PLATE_POLICY
         plates = propose_plate_regions(
             vehicle.crop,
@@ -39,6 +39,20 @@ def run_frame_pipeline(*, camera_id, frame_ts, frame, vehicles):
         # ============================================
         for p_idx, plate in enumerate(plates):
             try:
+                # ------------------------------------
+                # Defensive guard: malformed candidate
+                # ------------------------------------
+                if not isinstance(plate, dict) or "crop" not in plate:
+                    logger.error(
+                        "[OCR-CALIBRATION] malformed plate candidate | "
+                        "cam=%s vehicle=%d plate=%d keys=%s",
+                        camera_id,
+                        idx,
+                        p_idx,
+                        list(plate.keys()) if isinstance(plate, dict) else type(plate),
+                    )
+                    continue
+
                 logger.warning(
                     "[OCR-CALIBRATION] attempting OCR | cam=%s vehicle=%d plate=%d",
                     camera_id,
@@ -46,7 +60,7 @@ def run_frame_pipeline(*, camera_id, frame_ts, frame, vehicles):
                     p_idx,
                 )
 
-                ocr_result = run_ocr(plate.crop)
+                ocr_result = run_ocr(plate["crop"])
 
                 logger.warning(
                     "[OCR-CALIBRATION] result | cam=%s vehicle=%d plate=%d text=%r conf=%.3f",
