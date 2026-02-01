@@ -60,20 +60,8 @@ def run_frame_pipeline(*, camera_id, frame_ts, frame, vehicles):
         log_plate_candidates(camera_id, idx, plates)
 
         # ============================================
-        # ✅ STEP-2 — DUMP ONE PLATE CROP (THROTTLED)
-        # ============================================
-        if plates:
-            bbox = plates[0].get("bbox")
-            if bbox is not None:
-                maybe_dump_plate_crop(
-                    cam_id=camera_id,
-                    frame_ts=frame_ts,
-                    vehicle_crop=vehicle.crop,
-                    bbox=bbox,
-                )
-
-        # ============================================
         # 🔥 STEP 1 — FORCE OCR (CALIBRATION MODE)
+        # + STEP 2 — SINGLE DEBUG DUMP (OCR-CORRELATED)
         # ============================================
         for p_idx, plate in enumerate(plates):
             try:
@@ -82,6 +70,17 @@ def run_frame_pipeline(*, camera_id, frame_ts, frame, vehicles):
                     camera_id,
                     idx,
                     p_idx,
+                )
+
+                # 🔍 STEP-2: dump EXACT crop sent to OCR (throttled inside helper)
+                maybe_dump_plate_crop(
+                    cam_id=camera_id,
+                    frame_ts=frame_ts,
+                    vehicle_idx=idx,
+                    plate_idx=p_idx,
+                    vehicle_crop=vehicle.crop,
+                    plate_crop=plate["crop"],
+                    bbox=plate.get("bbox"),
                 )
 
                 ocr_result = run_ocr(plate["crop"])
