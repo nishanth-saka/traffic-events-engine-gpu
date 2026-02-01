@@ -82,6 +82,12 @@ def process_frame(
         return
 
     # -------------------------------------------------
+    # ANPR outcome aggregation (NEW)
+    # -------------------------------------------------
+    confirmed_count = 0
+    confirmed_conf_sum = 0.0
+
+    # -------------------------------------------------
     # Per-vehicle processing
     # -------------------------------------------------
     for vehicle in vehicles:
@@ -176,4 +182,26 @@ def process_frame(
                 metrics=quality["metrics"],
             )
 
-    logger.info("[PIPELINE] end | cam=%s", camera_id)
+            confirmed_count += 1
+            confirmed_conf_sum += confirmed_ocr["confidence"]
+
+    # -------------------------------------------------
+    # NEW: ANPR outcome log
+    # -------------------------------------------------
+    avg_conf = (
+        confirmed_conf_sum / confirmed_count
+        if confirmed_count > 0
+        else 0.0
+    )
+
+    logger.info(
+        "[ANPR] completed | cam=%s confirmed=%d avg_conf=%.2f",
+        camera_id,
+        confirmed_count,
+        avg_conf,
+    )
+
+    logger.info(
+        "[PIPELINE] end | cam=%s",
+        camera_id,
+    )
