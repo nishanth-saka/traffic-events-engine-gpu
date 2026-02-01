@@ -22,7 +22,15 @@ def run_frame_pipeline(*, camera_id, frame_ts, frame, vehicles):
 
     for idx, v in enumerate(vehicles):
         vehicle = Vehicle.from_detection(v, frame)
-        plates = propose_plate_regions(vehicle.crop)
+        
+        # plates = propose_plate_regions(vehicle.crop)
+        
+        from app.ingest.frame.policy import CALIBRATION_PLATE_POLICY
+        plates = propose_plate_regions(
+            vehicle.crop,
+            policy=CALIBRATION_PLATE_POLICY,
+        )
+
 
         log_plate_summary(camera_id, idx, len(plates))
         log_plate_candidates(camera_id, idx, plates)
