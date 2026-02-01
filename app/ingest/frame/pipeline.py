@@ -82,7 +82,7 @@ def process_frame(
         return
 
     # -------------------------------------------------
-    # ANPR outcome aggregation (NEW)
+    # ANPR outcome aggregation
     # -------------------------------------------------
     confirmed_count = 0
     confirmed_conf_sum = 0.0
@@ -145,13 +145,15 @@ def process_frame(
             # =================================================
             quality = evaluate_plate_quality(plate_img)
 
-            if not quality["allowed"]:
+            # ✅ FIX 1 + FIX 2
+            if not quality.passed:
                 emit_event(
                     "plate.detected_unreadable",
                     camera_id=camera_id,
                     ts=frame_ts,
-                    reason=quality["reason"],
-                    metrics=quality["metrics"],
+                    reason=quality.reason,
+                    score=quality.score,
+                    metrics=quality.metrics,
                 )
                 continue
 
@@ -168,7 +170,7 @@ def process_frame(
                     ts=frame_ts,
                     reason="low_confidence",
                     confidence=confirmed_ocr.get("confidence", 0.0),
-                    metrics=quality["metrics"],
+                    metrics=quality.metrics,
                 )
                 continue
 
@@ -179,14 +181,14 @@ def process_frame(
                 ts=frame_ts,
                 text=confirmed_ocr["text"],
                 confidence=confirmed_ocr["confidence"],
-                metrics=quality["metrics"],
+                metrics=quality.metrics,
             )
 
             confirmed_count += 1
             confirmed_conf_sum += confirmed_ocr["confidence"]
 
     # -------------------------------------------------
-    # NEW: ANPR outcome log
+    # ANPR outcome log
     # -------------------------------------------------
     avg_conf = (
         confirmed_conf_sum / confirmed_count
