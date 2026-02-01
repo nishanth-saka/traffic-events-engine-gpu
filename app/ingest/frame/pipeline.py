@@ -1,209 +1,149 @@
-# app/ingest/frame/pipeline.py
+# app/detection/detector.py
 
+import time
+import threading
 import logging
-from typing import List, Dict, Any, Optional
 
-from app.ingest.frame.plate_proposal import propose_plate_regions
-from app.ingest.frame.quality_gate import evaluate_plate_quality
-from app.ingest.frame.ocr import run_ocr
-from app.ingest.frame.events import emit_event
+from app.detection.vehicle_detector import detect_vehicles
+from app.ingest.frame.pipeline import process_frame
 
-logger = logging.getLogger(__name__)
-
-# ------------------------------------
-# Hybrid mode flags
-# ------------------------------------
-ENABLE_CANDIDATE_ANPR = True
-
-CANDIDATE_CONF_THRESHOLD = 0.30
-CONFIRMED_CONF_THRESHOLD = 0.75
-
-# Cheap sanity gate to avoid total junk
-MIN_PLATE_W = 60
-MIN_PLATE_H = 20
+logger = logging.getLogger("DetectionWorker")
 
 
-def process_frame(
-    *,
-    camera_id: str,
-    frame_ts: float,
-    frame,
-    frame_store=None,   # ✅ accepted (router + detector)
-    vehicles: Optional[List[Dict[str, Any]]] = None,  # ✅ optional
-):
+class DetectionWorker(threading.Thread):
     """
-    Phase A — Hybrid ANPR pipeline.
+    Stage-1 FPS-controlled detection worker (REAL VEHICLE DETECTION).
 
-    Responsibilities:
-    - Consume vehicle metadata if available
-    - Propose plate regions
-    - Emit candidate ANPR (fast, noisy)
-    - Emit confirmed ANPR (strict, trusted)
-
-    Side-effects only: events + logs
+    MVP logging rules:
+    - Detection heartbeat throttled (1 log / 10s)
+    - ANPR outcome logs remain INFO
     """
 
-    vehicle_count = len(vehicles) if vehicles else 0
-    logger.info(
-        "[PIPELINE] start | cam=%s vehicles=%d",
-        camera_id,
-        vehicle_count,
-    )
+    def __init__(
+        self,
+        cam_id: str,
+        frame_hub,
+        detection_manager,
+        fps: int = 2,
+        anpr_fps: float = 0.7,
+        vehicle_delta: int = 1,
+        per_vehicle_cooldown: float = 2.0,
+    ):
+        super().__init__(daemon=True)
 
-    # -------------------------------------------------
-    # Optional frame store update (safe no-op if None)
-    # -------------------------------------------------
-    if frame_store is not None:
-        try:
-            frame_store.update(
-                camera_id=camera_id,
-                frame=frame,
-                ts=frame_ts,
-            )
-        except Exception:
-            logger.exception(
-                "[PIPELINE] frame_store update failed | cam=%s",
-                camera_id,
-            )
+        self.cam_id = cam_id
+        self.frame_hub = frame_hub
+        self.detection_manager = detection_manager
 
-    # -------------------------------------------------
-    # No vehicles → nothing to process
-    # -------------------------------------------------
-    if not vehicles:
-        emit_event(
-            "frame.no_vehicle",
-            camera_id=camera_id,
-            ts=frame_ts,
+        # Detection FPS
+        self.interval = 1.0 / max(fps, 1)
+
+        # ANPR controls
+        self.anpr_interval = 1.0 / max(anpr_fps, 0.1)
+        self.vehicle_delta = vehicle_delta
+        self.per_vehicle_cooldown = per_vehicle_cooldown
+
+        self._last_anpr_ts = 0.0
+        self._last_vehicle_count = 0
+        self._vehicle_last_seen = {}
+
+        # MVP log throttling
+        self._last_detect_log_ts = 0.0
+        self._detect_log_interval = 10.0  # seconds
+
+        self.running = True
+        self._last_run = 0.0
+
+        logger.info(
+            "[DETECT] config | cam=%s detect_fps=%.1f anpr_fps=%.1f "
+            "vehicle_delta=%d cooldown=%.1fs",
+            self.cam_id,
+            1.0 / self.interval,
+            1.0 / self.anpr_interval,
+            self.vehicle_delta,
+            self.per_vehicle_cooldown,
         )
-        logger.debug(
-            "[PIPELINE] skip | cam=%s reason=no_vehicles",
-            camera_id,
+
+    def run(self):
+        logger.info(
+            "[DETECT] Vehicle worker started for %s @ %.1f FPS",
+            self.cam_id,
+            1.0 / self.interval,
         )
-        return
 
-    # -------------------------------------------------
-    # ANPR outcome aggregation
-    # -------------------------------------------------
-    confirmed_count = 0
-    confirmed_conf_sum = 0.0
+        while self.running:
+            now = time.time()
 
-    # -------------------------------------------------
-    # Per-vehicle processing
-    # -------------------------------------------------
-    for vehicle in vehicles:
-        vehicle_crop = vehicle.get("crop")
-        if vehicle_crop is None:
-            continue
-
-        plate_candidates = propose_plate_regions(vehicle_crop)
-
-        if not plate_candidates:
-            emit_event(
-                "vehicle.no_plate",
-                camera_id=camera_id,
-                ts=frame_ts,
-            )
-            continue
-
-        # -------------------------------------------------
-        # Per-plate processing
-        # -------------------------------------------------
-        for plate in plate_candidates:
-            plate_img = plate.get("crop")
-            if plate_img is None:
+            # FPS throttle
+            if now - self._last_run < self.interval:
+                time.sleep(0.01)
                 continue
 
-            h, w = plate_img.shape[:2]
+            self._last_run = now
 
-            # -------------------------------------------------
-            # Cheap sanity gate
-            # -------------------------------------------------
-            if h < MIN_PLATE_H or w < MIN_PLATE_W:
+            frame = self.frame_hub.get_latest(self.cam_id)
+            if frame is None:
                 continue
 
-            # =================================================
-            # HYBRID PATH 1 — CANDIDATE OCR (FAST / NOISY)
-            # =================================================
-            if ENABLE_CANDIDATE_ANPR:
-                candidate_ocr = run_ocr(plate_img)
+            try:
+                # 1️⃣ Vehicle detection
+                vehicles = detect_vehicles(frame)
+                vehicle_count = len(vehicles)
 
-                if (
-                    candidate_ocr.get("text")
-                    and candidate_ocr.get("confidence", 0.0)
-                    >= CANDIDATE_CONF_THRESHOLD
-                ):
-                    emit_event(
-                        "anpr.candidate",
-                        camera_id=camera_id,
-                        ts=frame_ts,
-                        text=candidate_ocr["text"],
-                        confidence=candidate_ocr["confidence"],
+                # Publish metadata
+                self.detection_manager.update(
+                    self.cam_id,
+                    vehicles=vehicles,
+                    plates=[],
+                )
+
+                # 🔇 MVP: throttled detection log
+                if now - self._last_detect_log_ts >= self._detect_log_interval:
+                    logger.info(
+                        "[DETECT] cam=%s vehicles=%d",
+                        self.cam_id,
+                        vehicle_count,
                     )
+                    self._last_detect_log_ts = now
 
-            # =================================================
-            # HYBRID PATH 2 — CONFIRMED OCR (STRICT)
-            # =================================================
-            quality = evaluate_plate_quality(plate_img)
+                if not vehicles:
+                    self._last_vehicle_count = 0
+                    continue
 
-            # ✅ FIX 1 + FIX 2
-            if not quality.passed:
-                emit_event(
-                    "plate.detected_unreadable",
-                    camera_id=camera_id,
-                    ts=frame_ts,
-                    reason=quality.reason,
-                    score=quality.score,
-                    metrics=quality.metrics,
+                # ANPR global throttle
+                if now - self._last_anpr_ts < self.anpr_interval:
+                    continue
+
+                # Vehicle delta trigger
+                if abs(vehicle_count - self._last_vehicle_count) < self.vehicle_delta:
+                    continue
+
+                # Per-vehicle cooldown
+                eligible = []
+                for v in vehicles:
+                    vid = v.get("id") or tuple(v.get("bbox", []))
+                    last_seen = self._vehicle_last_seen.get(vid, 0.0)
+                    if now - last_seen >= self.per_vehicle_cooldown:
+                        eligible.append(v)
+                        self._vehicle_last_seen[vid] = now
+
+                if not eligible:
+                    continue
+
+                # 3️⃣ Phase-A ANPR
+                process_frame(
+                    camera_id=self.cam_id,
+                    frame_ts=now,
+                    frame=frame,
+                    vehicles=eligible,
+                    frame_store=None,
                 )
-                continue
 
-            confirmed_ocr = run_ocr(plate_img)
+                self._last_anpr_ts = now
+                self._last_vehicle_count = vehicle_count
 
-            if (
-                not confirmed_ocr.get("text")
-                or confirmed_ocr.get("confidence", 0.0)
-                < CONFIRMED_CONF_THRESHOLD
-            ):
-                emit_event(
-                    "anpr.rejected",
-                    camera_id=camera_id,
-                    ts=frame_ts,
-                    reason="low_confidence",
-                    confidence=confirmed_ocr.get("confidence", 0.0),
-                    metrics=quality.metrics,
+            except Exception:
+                logger.exception(
+                    "[DETECT] Crash in detection pipeline on %s",
+                    self.cam_id,
                 )
-                continue
-
-            # ✅ TRUSTED NUMBER PLATE
-            emit_event(
-                "anpr.confirmed",
-                camera_id=camera_id,
-                ts=frame_ts,
-                text=confirmed_ocr["text"],
-                confidence=confirmed_ocr["confidence"],
-                metrics=quality.metrics,
-            )
-
-            confirmed_count += 1
-            confirmed_conf_sum += confirmed_ocr["confidence"]
-
-    # -------------------------------------------------
-    # ANPR outcome log
-    # -------------------------------------------------
-    avg_conf = (
-        confirmed_conf_sum / confirmed_count
-        if confirmed_count > 0
-        else 0.0
-    )
-
-    logger.info(
-        "[ANPR] completed | cam=%s confirmed=%d avg_conf=%.2f",
-        camera_id,
-        confirmed_count,
-        avg_conf,
-    )
-
-    logger.info(
-        "[PIPELINE] end | cam=%s",
-        camera_id,
-    )
