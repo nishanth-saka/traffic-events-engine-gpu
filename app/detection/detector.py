@@ -5,7 +5,7 @@ import threading
 import logging
 
 from app.detection.vehicle_detector import detect_vehicles
-from app.ingest.frame.pipeline import process_frame
+# ❌ REMOVED: from app.ingest.frame.pipeline import process_frame
 
 logger = logging.getLogger("DetectionWorker")
 
@@ -129,6 +129,9 @@ class DetectionWorker(threading.Thread):
 
                 if not eligible:
                     continue
+
+                # 🔥 LAZY IMPORT — breaks circular startup import
+                from app.ingest.frame.pipeline import process_frame
 
                 # 3️⃣ Phase-A ANPR
                 process_frame(
