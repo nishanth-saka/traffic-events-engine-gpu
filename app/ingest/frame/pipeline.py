@@ -1,7 +1,7 @@
 # app/ingest/frame/pipeline.py
 
 import logging
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from app.ingest.frame.plate_proposal import propose_plate_regions
 from app.ingest.frame.quality_gate import evaluate_plate_quality
@@ -28,13 +28,14 @@ def process_frame(
     camera_id: str,
     frame_ts: float,
     frame,
-    vehicles: List[Dict[str, Any]],
+    frame_store=None,   # ✅ accepted (router + detector)
+    vehicles: Optional[List[Dict[str, Any]]] = None,  # ✅ optional
 ):
     """
     Phase A — Hybrid ANPR pipeline.
 
     Responsibilities:
-    - Consume vehicle metadata (NO vehicle detection here)
+    - Consume vehicle metadata if available
     - Propose plate regions
     - Emit candidate ANPR (fast, noisy)
     - Emit confirmed ANPR (strict, trusted)
@@ -42,13 +43,41 @@ def process_frame(
     Side-effects only: events + logs
     """
 
-    logger.info("[PIPELINE] start | cam=%s vehicles=%d", camera_id, len(vehicles))
+    vehicle_count = len(vehicles) if vehicles else 0
+    logger.info(
+        "[PIPELINE] start | cam=%s vehicles=%d",
+        camera_id,
+        vehicle_count,
+    )
 
+    # -------------------------------------------------
+    # Optional frame store update (safe no-op if None)
+    # -------------------------------------------------
+    if frame_store is not None:
+        try:
+            frame_store.update(
+                camera_id=camera_id,
+                frame=frame,
+                ts=frame_ts,
+            )
+        except Exception:
+            logger.exception(
+                "[PIPELINE] frame_store update failed | cam=%s",
+                camera_id,
+            )
+
+    # -------------------------------------------------
+    # No vehicles → nothing to process
+    # -------------------------------------------------
     if not vehicles:
         emit_event(
             "frame.no_vehicle",
             camera_id=camera_id,
             ts=frame_ts,
+        )
+        logger.debug(
+            "[PIPELINE] skip | cam=%s reason=no_vehicles",
+            camera_id,
         )
         return
 
@@ -81,13 +110,13 @@ def process_frame(
             h, w = plate_img.shape[:2]
 
             # -------------------------------------------------
-            # Cheap sanity gate (prevents total garbage OCR)
+            # Cheap sanity gate
             # -------------------------------------------------
             if h < MIN_PLATE_H or w < MIN_PLATE_W:
                 continue
 
             # =================================================
-            # HYBRID PATH 1 — CANDIDATE OCR (UNGATED)
+            # HYBRID PATH 1 — CANDIDATE OCR (FAST / NOISY)
             # =================================================
             if ENABLE_CANDIDATE_ANPR:
                 candidate_ocr = run_ocr(plate_img)
@@ -137,7 +166,7 @@ def process_frame(
                 )
                 continue
 
-            # ✅ TRUSTED, REAL NUMBER PLATE
+            # ✅ TRUSTED NUMBER PLATE
             emit_event(
                 "anpr.confirmed",
                 camera_id=camera_id,

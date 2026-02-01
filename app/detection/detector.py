@@ -1,3 +1,5 @@
+# app/detection/detector.py
+
 import time
 import threading
 import logging
