@@ -1,9 +1,10 @@
+# app/detection/detector.py
 import time
 import threading
 import logging
 
 from app.detection.vehicle_detector import detect_vehicles
-from app.ingest.frame.pipeline import process_frame
+from app.ingest.frame.pipeline import run_frame_pipeline
 
 logger = logging.getLogger("DetectionWorker")
 
@@ -11,12 +12,6 @@ logger = logging.getLogger("DetectionWorker")
 class DetectionWorker(threading.Thread):
     """
     Stage-1 FPS-controlled detection worker.
-
-    Responsibilities:
-    - Pull latest frame from FrameHub
-    - Run vehicle detection
-    - Apply ANPR throttling logic
-    - Invoke frame pipeline (pure)
     """
 
     def __init__(
@@ -35,7 +30,6 @@ class DetectionWorker(threading.Thread):
         self.frame_hub = frame_hub
         self.detection_manager = detection_manager
 
-        # FPS controls
         self.interval = 1.0 / max(fps, 1)
         self.anpr_interval = 1.0 / max(anpr_fps, 0.1)
 
@@ -55,7 +49,6 @@ class DetectionWorker(threading.Thread):
         while self.running:
             now = time.time()
 
-            # FPS throttle
             if now - self._last_run < self.interval:
                 time.sleep(0.01)
                 continue
@@ -66,11 +59,9 @@ class DetectionWorker(threading.Thread):
                 continue
 
             try:
-                # 1️⃣ Vehicle detection
                 vehicles = detect_vehicles(frame)
                 count = len(vehicles)
 
-                # Publish detection metadata
                 self.detection_manager.update(
                     self.cam_id,
                     vehicles=vehicles,
@@ -81,18 +72,15 @@ class DetectionWorker(threading.Thread):
                     self._last_vehicle_count = 0
                     continue
 
-                # 2️⃣ Global ANPR throttle
                 if now - self._last_anpr_ts < self.anpr_interval:
                     continue
 
-                # 3️⃣ Vehicle-count delta trigger
                 if abs(count - self._last_vehicle_count) < self.vehicle_delta:
                     continue
 
-                # 4️⃣ Per-vehicle cooldown
                 eligible = []
                 for v in vehicles:
-                    vid = v.get("id") or tuple(v.get("bbox", []))
+                    vid = tuple(v["bbox"])
                     last_seen = self._vehicle_last_seen.get(vid, 0.0)
                     if now - last_seen >= self.per_vehicle_cooldown:
                         eligible.append(v)
@@ -101,8 +89,7 @@ class DetectionWorker(threading.Thread):
                 if not eligible:
                     continue
 
-                # 5️⃣ Run pure frame pipeline
-                process_frame(
+                run_frame_pipeline(
                     camera_id=self.cam_id,
                     frame_ts=now,
                     frame=frame,
@@ -113,7 +100,4 @@ class DetectionWorker(threading.Thread):
                 self._last_vehicle_count = count
 
             except Exception:
-                logger.exception(
-                    "[DETECT] crash | cam=%s",
-                    self.cam_id,
-                )
+                logger.exception("[DETECT] crash | cam=%s", self.cam_id)

@@ -2,17 +2,24 @@
 
 import cv2
 import numpy as np
-import logging
 from typing import List, Dict
 
-logger = logging.getLogger(__name__)
+from app.ingest.frame.policy import DEFAULT_PLATE_POLICY, PlateProposalPolicy
 
-def propose_plate_regions(vehicle_crop: np.ndarray) -> List[Dict]:
+
+def propose_plate_regions(
+    vehicle_crop: np.ndarray,
+    policy: PlateProposalPolicy = DEFAULT_PLATE_POLICY,
+) -> List[Dict]:
     """
     Propose license plate candidate regions from a vehicle crop.
 
-    Returns a list of dicts with geometry + quality metrics.
-    NO OCR. NO side effects.
+    Gate-2 behavior:
+    - Geometry & size are gated by policy
+    - Blur & skew are COMPUTED, not filtered (metrics only)
+
+    Returns:
+        List of dicts with bbox + quality metrics
     """
 
     if vehicle_crop is None:
@@ -23,11 +30,8 @@ def propose_plate_regions(vehicle_crop: np.ndarray) -> List[Dict]:
         return []
 
     gray = cv2.cvtColor(vehicle_crop, cv2.COLOR_BGR2GRAY)
-
-    # Edge detection
     edges = cv2.Canny(gray, 100, 200)
 
-    # Morphological close to connect characters
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 3))
     edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel)
 
@@ -37,19 +41,22 @@ def propose_plate_regions(vehicle_crop: np.ndarray) -> List[Dict]:
         cv2.CHAIN_APPROX_SIMPLE,
     )
 
-    candidates = []
+    candidates: List[Dict] = []
 
     for cnt in contours:
         x, y, cw, ch = cv2.boundingRect(cnt)
 
-        aspect = cw / float(ch)
-        area = cw * ch
-        area_ratio = area / float(w * h)
-
-        # Plate geometry heuristics
-        if not (2.0 <= aspect <= 6.0):
+        # --- Absolute size guardrails ---
+        if cw < policy.min_width or ch < policy.min_height:
             continue
-        if not (0.01 <= area_ratio <= 0.2):
+
+        aspect = cw / float(ch)
+        area_ratio = (cw * ch) / float(w * h)
+
+        # --- Geometry constraints ---
+        if not (policy.min_aspect <= aspect <= policy.max_aspect):
+            continue
+        if not (policy.min_area_ratio <= area_ratio <= policy.max_area_ratio):
             continue
 
         crop = vehicle_crop[y:y + ch, x:x + cw]
@@ -68,6 +75,10 @@ def propose_plate_regions(vehicle_crop: np.ndarray) -> List[Dict]:
     return candidates
 
 
+# -------------------------------------------------
+# Metrics helpers
+# -------------------------------------------------
+
 def _blur_score(img: np.ndarray) -> float:
     """Variance of Laplacian (higher = sharper)."""
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -75,7 +86,7 @@ def _blur_score(img: np.ndarray) -> float:
 
 
 def _skew_angle(cnt) -> float:
-    """Absolute angle of minimum-area rectangle."""
+    """Absolute skew angle from minimum-area rectangle."""
     rect = cv2.minAreaRect(cnt)
     angle = rect[-1]
     if angle < -45:

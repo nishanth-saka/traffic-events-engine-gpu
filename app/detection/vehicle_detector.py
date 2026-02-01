@@ -1,3 +1,4 @@
+# app/detection/vehicle_detector.py
 import logging
 from ultralytics import YOLO
 
