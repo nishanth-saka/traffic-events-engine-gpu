@@ -1,4 +1,3 @@
-# app/ingest/frame/pipeline.py
 import logging
 
 from app.ingest.frame.types import Vehicle
@@ -22,10 +21,11 @@ def run_frame_pipeline(*, camera_id, frame_ts, frame, vehicles):
     log_pipeline_start(camera_id, len(vehicles))
 
     for idx, v in enumerate(vehicles):
-        vehicle = Vehicle.from_detection(v, frame)
+        vehicle = Vehicle.from_detection(v,_hook=frame)
 
         # 🔓 Gate-2 calibration policy
         from app.ingest.frame.policy import CALIBRATION_PLATE_POLICY
+
         plates = propose_plate_regions(
             vehicle.crop,
             policy=CALIBRATION_PLATE_POLICY,
@@ -39,20 +39,6 @@ def run_frame_pipeline(*, camera_id, frame_ts, frame, vehicles):
         # ============================================
         for p_idx, plate in enumerate(plates):
             try:
-                # ------------------------------------
-                # Defensive guard: malformed candidate
-                # ------------------------------------
-                if not isinstance(plate, dict) or "crop" not in plate:
-                    logger.error(
-                        "[OCR-CALIBRATION] malformed plate candidate | "
-                        "cam=%s vehicle=%d plate=%d keys=%s",
-                        camera_id,
-                        idx,
-                        p_idx,
-                        list(plate.keys()) if isinstance(plate, dict) else type(plate),
-                    )
-                    continue
-
                 logger.warning(
                     "[OCR-CALIBRATION] attempting OCR | cam=%s vehicle=%d plate=%d",
                     camera_id,
@@ -82,5 +68,5 @@ def run_frame_pipeline(*, camera_id, frame_ts, frame, vehicles):
 
     return {
         "vehicles": vehicles,
-        "plates": [],  # deliberately NOT emitting yet
+        "plates": [],  # intentionally not emitted yet
     }

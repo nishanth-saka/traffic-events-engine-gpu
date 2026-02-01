@@ -1,4 +1,3 @@
-# app/ingest/frame/logger.py
 import logging
 
 logger = logging.getLogger("FramePipeline")
@@ -24,7 +23,7 @@ def log_plate_summary(cam_id: str, vehicle_idx: int, count: int):
 def log_plate_candidates(cam_id: str, vehicle_idx: int, plates: list):
     for idx, p in enumerate(plates):
         logger.debug(
-            "[PLATE_CAND] cam=%s v=%d p=%d area=%.3f aspect=%.2f blur=%.1f skew=%.1f",
+            "[PLATE_CAND] cam=%s v=%d p=%d area=%.4f aspect=%.2f blur=%.1f skew=%.1f",
             cam_id,
             vehicle_idx,
             idx,
