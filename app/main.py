@@ -56,6 +56,7 @@ try:
     shutil.rmtree(PLATE_DEBUG_DIR, ignore_errors=True)
     os.makedirs(PLATE_DEBUG_DIR, exist_ok=True)
     logger.info("[STARTUP] Cleared plate debug dir: %s", PLATE_DEBUG_DIR)
+    print(f"[STARTUP] Cleared plate debug dir: {PLATE_DEBUG_DIR}", flush=True)
 except Exception as e:
     logger.warning(
         "[STARTUP] Failed to reset plate debug dir %s: %s",
