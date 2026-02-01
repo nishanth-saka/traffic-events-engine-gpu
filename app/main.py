@@ -88,6 +88,10 @@ def startup():
     logger.info("[Startup] FrameHub initialized & cameras registered")
     
     from fastapi.staticfiles import StaticFiles
+    
+    # 🔑 MUST exist before mounting
+    os.makedirs("/tmp/plate_debug", exist_ok=True)
+
     app.mount(
         "/debug/plates",
         StaticFiles(directory="/tmp/plate_debug"),
