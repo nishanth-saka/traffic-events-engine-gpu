@@ -53,15 +53,18 @@ logger = logging.getLogger(__name__)
 PLATE_DEBUG_DIR = "/tmp/plate_debug"
 
 try:
-    shutil.rmtree(PLATE_DEBUG_DIR, ignore_errors=True)
-    os.makedirs(PLATE_DEBUG_DIR, exist_ok=True)
-    logger.info("[STARTUP] Cleared plate debug dir: %s", PLATE_DEBUG_DIR)
-    print(f"[STARTUP] Cleared plate debug dir: {PLATE_DEBUG_DIR}", flush=True)
+    files = os.listdir(PLATE_DEBUG_DIR)
+    jpgs = [f for f in files if f.lower().endswith(".jpg")]
+
+    print(
+        f"[STARTUP] Plate debug dir contents after cleanup: "
+        f"{len(files)} files, {len(jpgs)} JPGs → {files}",
+        flush=True,
+    )
 except Exception as e:
-    logger.warning(
-        "[STARTUP] Failed to reset plate debug dir %s: %s",
-        PLATE_DEBUG_DIR,
-        e,
+    print(
+        f"[STARTUP] Failed to inspect plate debug dir {PLATE_DEBUG_DIR}: {e}",
+        flush=True,
     )
 
 # =================================================
