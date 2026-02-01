@@ -20,14 +20,21 @@ def propose_plate_regions(
 ) -> List[Dict]:
     """
     Generate candidate license plate regions from a vehicle crop.
-    Gate-2 proposal stage (metrics live here).
+    Gate-2 proposal stage.
+
+    Calibration mode:
+    - Loose thresholds
+    - Metrics computed, NOT filtered
     """
 
     if vehicle_crop is None:
         return []
 
     h, w = vehicle_crop.shape[:2]
-    if h < 40 or w < 80:
+
+    # NOTE: do NOT early-return aggressively here
+    # Small vehicles still useful during calibration
+    if h < 30 or w < 60:
         return []
 
     gray = cv2.cvtColor(vehicle_crop, cv2.COLOR_BGR2GRAY)
@@ -37,10 +44,12 @@ def propose_plate_regions(
     # -----------------------------
     if policy == "calibration":
         canny_low, canny_high = 50, 150
-        min_area_ratio = 0.002
+        min_area_ratio = 0.0015
+        aspect_min, aspect_max = 1.8, 7.5
     else:
         canny_low, canny_high = 100, 200
         min_area_ratio = 0.005
+        aspect_min, aspect_max = 2.2, 6.0
 
     edges = cv2.Canny(gray, canny_low, canny_high)
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 3))
@@ -51,18 +60,18 @@ def propose_plate_regions(
     )
 
     proposals: List[Dict] = []
-    img_area = h * w
+    img_area = float(h * w)
 
     for cnt in contours:
         x, y, cw, ch = cv2.boundingRect(cnt)
-        area = cw * ch
+        area = float(cw * ch)
         area_ratio = area / img_area
 
         if area_ratio < min_area_ratio:
             continue
 
         aspect = cw / max(ch, 1)
-        if not (2.0 < aspect < 6.5):
+        if not (aspect_min < aspect < aspect_max):
             continue
 
         crop = vehicle_crop[y : y + ch, x : x + cw]
@@ -82,5 +91,14 @@ def propose_plate_regions(
                 "skew": _estimate_skew(crop_gray),
             }
         )
+
+    # -----------------------------
+    # Ranking (NOT filtering)
+    # Bigger + better aspect first
+    # -----------------------------
+    proposals.sort(
+        key=lambda p: (p["area_ratio"], p["aspect"]),
+        reverse=True,
+    )
 
     return proposals
