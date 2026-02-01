@@ -21,7 +21,29 @@ def run_frame_pipeline(*, camera_id, frame_ts, frame, vehicles):
     log_pipeline_start(camera_id, len(vehicles))
 
     for idx, v in enumerate(vehicles):
-        vehicle = Vehicle.from_detection(v,_hook=frame)
+        vehicle = Vehicle.from_detection(v, frame)
+
+        # ============================================
+        # 🛡️ DEFENSIVE: skip if vehicle crop is invalid
+        # ============================================
+        if vehicle.crop is None:
+            logger.warning(
+                "[PIPELINE] skip vehicle | cam=%s vehicle=%d reason=no_crop",
+                camera_id,
+                idx,
+            )
+            continue
+
+        h, w = vehicle.crop.shape[:2]
+        if h < 40 or w < 80:
+            logger.warning(
+                "[PIPELINE] skip vehicle | cam=%s vehicle=%d reason=small_crop h=%d w=%d",
+                camera_id,
+                idx,
+                h,
+                w,
+            )
+            continue
 
         # 🔓 Gate-2 calibration policy
         from app.ingest.frame.policy import CALIBRATION_PLATE_POLICY
