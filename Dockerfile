@@ -11,8 +11,12 @@ ENV NUMEXPR_NUM_THREADS=1
 
 WORKDIR /app
 
-# System deps
+# -------------------------------------------------
+# System deps (OCR + OpenCV)
+# -------------------------------------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    tesseract-ocr \
+    tesseract-ocr-eng \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
@@ -22,17 +26,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-# 🔥 COPY requirements FIRST (cache key)
+# -------------------------------------------------
+# Python deps
+# -------------------------------------------------
 COPY requirements.txt .
 
-# 🔥 FORCE pip to show what it installs
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt
 
-# Copy app code AFTER deps
+# -------------------------------------------------
+# App code
+# -------------------------------------------------
 COPY . .
 
 CMD sh -c "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"
-
-
-# cache-bust-2026-01-31T13:40
