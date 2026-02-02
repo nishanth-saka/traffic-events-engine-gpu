@@ -1,9 +1,13 @@
+# app/main.py
+
 # =================================================
 # 🔥 PHASE 1 — FORENSIC PYTHON STARTUP LOGGING
 # =================================================
 import os
 import shutil
 import sys
+import uuid
+import logging
 
 FORENSIC_STARTUP = True
 
@@ -38,18 +42,17 @@ if FORENSIC_STARTUP:
 # =================================================
 # NORMAL IMPORTS
 # =================================================
-import uuid
-import logging
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from app.config import CAMERAS
 from app.shared import app_state
 
 logger = logging.getLogger(__name__)
 
-# ------------------------------------
+# =================================================
 # 🔥 Startup cleanup (Gate-2 debug)
-# ------------------------------------
+# =================================================
 PLATE_DEBUG_DIR = "/tmp/plate_debug"
 
 try:
@@ -81,7 +84,6 @@ except Exception as e:
 # =================================================
 BOOT_ID = str(uuid.uuid4())[:8]
 
-# 🔑 GUARANTEE boot_id exists on *every* LogRecord
 _old_factory = logging.getLogRecordFactory()
 
 
@@ -103,9 +105,24 @@ logger = logging.getLogger("app.main")
 logger.warning("🔥 Logging initialized (boot_id=%s)", BOOT_ID)
 
 # =================================================
-# FASTAPI APP
+# FASTAPI APP (AUTHORITATIVE APP OBJECT)
 # =================================================
 app = FastAPI(title="Traffic Events Engine")
+
+# -------------------------------------------------
+# 🔎 DEBUG: plate dump browser (TOP-LEVEL ONLY)
+# -------------------------------------------------
+os.makedirs(PLATE_DEBUG_DIR, exist_ok=True)
+
+app.mount(
+    "/debug/plates",
+    StaticFiles(directory=PLATE_DEBUG_DIR),
+    name="plate_debug",
+)
+
+logger.warning(
+    "🖼️ Debug plate browser mounted → /debug/plates"
+)
 
 # =================================================
 # STARTUP — RUNTIME WIRING ONLY
@@ -131,23 +148,6 @@ def startup():
         frame_hub.register(cam_id)
 
     logger.info("[Startup] FrameHub initialized & cameras registered")
-
-    # -------------------------------
-    # Plate debug dump (CALIBRATION)
-    # -------------------------------
-    from fastapi.staticfiles import StaticFiles
-
-    os.makedirs("/tmp/plate_debug", exist_ok=True)
-
-    app.mount(
-        "/debug/plates",
-        StaticFiles(directory="/tmp/plate_debug"),
-        name="plate_debug",
-    )
-
-    logger.warning(
-        "[Startup] Plate debug mount active → /debug/plates (CALIBRATION MODE)"
-    )
 
     # -------------------------------
     # RTSP ingestion (SUB stream ONLY)
