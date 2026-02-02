@@ -114,11 +114,13 @@ app = FastAPI(title="Traffic Events Engine")
 # -------------------------------------------------
 os.makedirs(PLATE_DEBUG_DIR, exist_ok=True)
 
-app.mount(
-    "/debug/plates",
-    StaticFiles(directory=PLATE_DEBUG_DIR),
-    name="plate_debug",
-)
+# app.mount(
+#     "/debug/plates",
+#     StaticFiles(directory=PLATE_DEBUG_DIR),
+#     name="plate_debug",
+# )
+
+app.mount("/debug/plates/fs", StaticFiles(directory=PLATE_DEBUG_DIR), name="plate_debug")
 
 logger.warning(
     "🖼️ Debug plate browser mounted → /debug/plates"
