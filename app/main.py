@@ -212,10 +212,12 @@ def startup():
 from app.routes import preview  # noqa: E402
 from app.routes import debug_rtsp  # noqa: E402
 from app.routes import debug_plates  # noqa: E402
+from app.routes import system  # noqa: E402
 
 app.include_router(preview.router)
 app.include_router(debug_rtsp.router)
 app.include_router(debug_plates.router)
+app.include_router(system.router)
 
 # =================================================
 # Railway entrypoint:
