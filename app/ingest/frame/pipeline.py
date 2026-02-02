@@ -40,10 +40,18 @@ def run_frame_pipeline(*, camera_id, frame_ts, frame, vehicles):
         if h < 40 or w < 80:
             continue
 
+        # plates = propose_plate_regions(
+        #     vehicle.crop,
+        #     policy=CALIBRATION_PLATE_POLICY,
+        # )
+        
+        # inside run_frame_pipeline()
+
         plates = propose_plate_regions(
             vehicle.crop,
-            policy=CALIBRATION_PLATE_POLICY,
+            vehicle_type=vehicle.vehicle_type,   # ← IMPORTANT
         )
+
 
         log_plate_summary(camera_id, v_idx, len(plates))
         log_plate_candidates(camera_id, v_idx, plates)

@@ -1,152 +1,118 @@
 # app/ingest/frame/plate_proposal.py
 
-import os
 import cv2
 import numpy as np
-from typing import List, Dict, Optional
+from typing import List, Dict
 
-# ------------------------------------
-# Internal debug switch (SAFE)
-# ------------------------------------
-DEBUG_INTERNAL_PLATES = os.getenv("DEBUG_INTERNAL_PLATES", "0") == "1"
-DEBUG_DIR = "/tmp/plate_debug"
+from app.ingest.frame.policy import (
+    PlateProposalPolicy,
+    CAR_PLATE_POLICY,
+    AUTO_PLATE_POLICY,
+    TRUCK_PLATE_POLICY,
+    DEFAULT_PLATE_POLICY,
+)
 
 
 def _estimate_blur(gray: np.ndarray) -> float:
-    """Variance of Laplacian (cheap + standard)."""
+    """Cheap sharpness metric (variance of Laplacian)."""
     return float(cv2.Laplacian(gray, cv2.CV_64F).var())
-
-
-def _estimate_skew(_: np.ndarray) -> float:
-    """Placeholder (real skew later via Hough / PCA)."""
-    return 0.0
 
 
 def propose_plate_regions(
     vehicle_crop: np.ndarray,
     *,
-    policy: Optional[str] = None,
+    vehicle_type: str | None = None,
+    policy: PlateProposalPolicy | None = None,
 ) -> List[Dict]:
     """
-    Generate candidate license plate regions from a VEHICLE CROP.
+    Gate-2: Propose license plate candidate regions.
 
-    ⚠️ IMPORTANT:
-    - All returned bboxes are RELATIVE TO vehicle_crop
-    - No resizing is performed in this function
-    - Any downstream drawing MUST respect this coordinate space
-
-    Calibration mode:
-    - Loose thresholds
-    - Metrics computed, NOT filtered
+    Includes:
+    - Vehicle-type spatial priors (India-specific)
+    - Hard top-of-vehicle exclusion
+    - Tightened aspect ratio bands
     """
 
     if vehicle_crop is None:
         return []
 
-    if vehicle_crop.ndim != 3:
-        return []
-
     h, w = vehicle_crop.shape[:2]
-
-    # Calibration: avoid aggressive early exits
-    if h < 30 or w < 60:
+    if h < 40 or w < 80:
         return []
 
-    # Defensive copy (prevents accidental mutation upstream)
-    vehicle_crop = vehicle_crop.copy()
+    # -----------------------------
+    # Policy selection
+    # -----------------------------
+    if policy is None:
+        if vehicle_type in {"auto", "autorickshaw"}:
+            policy = AUTO_PLATE_POLICY
+        elif vehicle_type in {"truck", "bus"}:
+            policy = TRUCK_PLATE_POLICY
+        else:
+            policy = DEFAULT_PLATE_POLICY
+
+    # Defensive fallback (future-proof)
+    if policy is None:
+        policy = DEFAULT_PLATE_POLICY
 
     gray = cv2.cvtColor(vehicle_crop, cv2.COLOR_BGR2GRAY)
-
-    # -----------------------------
-    # Policy thresholds
-    # -----------------------------
-    if policy == "calibration":
-        canny_low, canny_high = 50, 150
-        min_area_ratio = 0.0015
-        aspect_min, aspect_max = 1.8, 7.5
-    else:
-        canny_low, canny_high = 100, 200
-        min_area_ratio = 0.005
-        aspect_min, aspect_max = 2.2, 6.0
-
-    edges = cv2.Canny(gray, canny_low, canny_high)
+    edges = cv2.Canny(gray, 100, 200)
 
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 3))
     edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel)
 
     contours, _ = cv2.findContours(
-        edges,
-        cv2.RETR_EXTERNAL,
-        cv2.CHAIN_APPROX_SIMPLE,
+        edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
     )
 
-    proposals: List[Dict] = []
-    img_area = float(h * w)
+    candidates: List[Dict] = []
+    vehicle_area = float(h * w)
 
     for cnt in contours:
         x, y, cw, ch = cv2.boundingRect(cnt)
-
-        # Absolute sanity
         if cw <= 0 or ch <= 0:
             continue
 
-        area = float(cw * ch)
-        area_ratio = area / img_area
-
-        if area_ratio < min_area_ratio:
+        # 🔹 Noise guard: ultra-thin contours
+        if ch < 12 or cw < 40:
             continue
 
-        aspect = cw / max(ch, 1)
-        if not (aspect_min < aspect < aspect_max):
+        area_ratio = (cw * ch) / vehicle_area
+        if not (policy.min_area_ratio <= area_ratio <= policy.max_area_ratio):
             continue
 
-        # Clamp to image bounds (paranoia)
-        x2 = min(x + cw, w)
-        y2 = min(y + ch, h)
-        crop = vehicle_crop[y:y2, x:x2]
-
-        if crop.size == 0:
+        aspect = cw / float(ch)
+        if not (policy.aspect_ratio_range[0] <= aspect <= policy.aspect_ratio_range[1]):
             continue
 
-        crop_gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+        # -----------------------------
+        # Normalized spatial checks
+        # -----------------------------
+        cx = (x + cw / 2) / w
+        cy = (y + ch / 2) / h
 
-        proposal = {
-            "bbox": (x, y, x2 - x, y2 - y),  # RELATIVE TO vehicle_crop
-            "crop": crop,
-            "area": area,
-            "area_ratio": area_ratio,
-            "aspect": aspect,
-            "blur": _estimate_blur(crop_gray),
-            "skew": _estimate_skew(crop_gray),
-        }
+        # 🔴 Hard top exclusion (roof / canopy / rails)
+        if y < policy.top_exclusion_y * h:
+            continue
 
-        proposals.append(proposal)
+        # 🔴 Vertical placement prior
+        if cy < policy.min_cy:
+            continue
 
-        # ------------------------------------
-        # 🔍 INTERNAL DEBUG (SOURCE OF TRUTH)
-        # ------------------------------------
-        if DEBUG_INTERNAL_PLATES:
-            os.makedirs(DEBUG_DIR, exist_ok=True)
-            dbg = vehicle_crop.copy()
-            cv2.rectangle(
-                dbg,
-                (x, y),
-                (x2, y2),
-                (0, 0, 255),  # RED = internal truth
-                2,
-            )
-            cv2.imwrite(
-                f"{DEBUG_DIR}/_internal_plate_{x}_{y}_{cw}_{ch}.jpg",
-                dbg,
-            )
+        # 🔴 Horizontal centering prior
+        if abs(cx - 0.5) > policy.max_cx_offset:
+            continue
 
-    # -----------------------------
-    # Ranking (NOT filtering)
-    # Bigger + better aspect first
-    # -----------------------------
-    proposals.sort(
-        key=lambda p: (p["area_ratio"], p["aspect"]),
-        reverse=True,
-    )
+        plate_crop = gray[y:y + ch, x:x + cw]
+        blur = _estimate_blur(plate_crop)
 
-    return proposals
+        candidates.append({
+            "bbox": (x, y, cw, ch),
+            "area_ratio": round(area_ratio, 4),
+            "aspect": round(aspect, 2),
+            "cx": round(cx, 3),
+            "cy": round(cy, 3),
+            "blur": round(blur, 1),
+        })
+
+    return candidates
