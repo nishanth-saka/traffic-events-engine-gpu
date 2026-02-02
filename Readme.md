@@ -1,22 +1,14 @@
-curl -X POST \
-  -F "camera_id=cam_1" \
-  -F "image=@/Users/strangerd/Desktop/random.png" \
-  https://traffic-events-engine-production.up.railway.app/ingest/frame
+What I’d refactor immediately after MAIN OCR works
 
-  curl -X POST \
-  -F "camera_id=cam_1" \
-  -F "image=@/Users/strangerd/Desktop/SAMPLE.png" \
-  https://traffic-events-engine-production.up.railway.app/ingest/frame
+Order matters:
+Hard OCR gate (single line change)
+Vehicle-level OCR cooldown
+Plate confidence cache
+Disable SUB OCR forever
+Lower MAIN burst FPS
+Move debug dumps behind env flag
+No infra changes yet — just logic.
 
-  curl https://traffic-events-engine-production.up.railway.app/debug/pipeline
-
-  ffmpeg -rtsp_transport tcp \
-  -i "rtsp://admin:Admin%40123@103.88.236.191:10554/cam/realmonitor?channel=1&subtype=0" \
-  -f null -
-
-
-https://traffic-events-engine-production.up.railway.app/preview/stream/cam_1
-https://traffic-events-engine-production.up.railway.app/preview/stream/cam_1
-
-
-
+TARGET:
+₹0.20–₹0.50 per 1,000 vehicle passes
+(depending on OCR backend)
