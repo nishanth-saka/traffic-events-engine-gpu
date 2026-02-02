@@ -51,3 +51,13 @@ CALIBRATION_PLATE_POLICY = PlateProposalPolicy(
     max_skew=45.0,
 )
 
+# -------------------------------------------------
+# OCR gating thresholds
+# -------------------------------------------------
+
+CANDIDATE_CONF_THRESHOLD = 0.30
+CONFIRMED_CONF_THRESHOLD = 0.75
+
+ENABLE_HEAVY_OCR = False   # flip later
+
+

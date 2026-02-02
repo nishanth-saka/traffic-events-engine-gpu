@@ -46,3 +46,20 @@ def evaluate_plate_quality(plate_img) -> GateResult:
         return GateResult(False, "blur", lap)
 
     return GateResult(True, "ok", lap)
+
+def cheap_plate_gate(plate: dict) -> bool:
+    """
+    Ultra-cheap pre-OCR gate.
+    Uses proposal metrics (NOT image ops).
+    """
+
+    if plate["area_ratio"] < 0.005:
+        return False
+
+    if not (2.0 <= plate["aspect"] <= 7.5):
+        return False
+
+    if plate["blur"] < 45.0:
+        return False
+
+    return True
