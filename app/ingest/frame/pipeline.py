@@ -25,14 +25,7 @@ logger = logging.getLogger(__name__)
 
 def run_frame_pipeline(*, camera_id, frame_ts, frame, vehicles):
     """
-    Gate-2 frame pipeline.
-
-    Vehicle →
-      Plate proposals →
-        Cheap gate →
-          OCR →
-            Confidence gate →
-              Event emission
+    Gate-2 frame pipeline with OCR debug metadata.
     """
 
     log_pipeline_start(camera_id, len(vehicles))
@@ -40,31 +33,13 @@ def run_frame_pipeline(*, camera_id, frame_ts, frame, vehicles):
     for v_idx, v in enumerate(vehicles):
         vehicle = Vehicle.from_detection(v, frame)
 
-        # --------------------------------------------
-        # Defensive guards
-        # --------------------------------------------
         if vehicle.crop is None:
-            logger.debug(
-                "[PIPELINE] skip vehicle | cam=%s vehicle=%d reason=no_crop",
-                camera_id,
-                v_idx,
-            )
             continue
 
         h, w = vehicle.crop.shape[:2]
         if h < 40 or w < 80:
-            logger.debug(
-                "[PIPELINE] skip vehicle | cam=%s vehicle=%d reason=small_crop h=%d w=%d",
-                camera_id,
-                v_idx,
-                h,
-                w,
-            )
             continue
 
-        # --------------------------------------------
-        # Gate-2: plate proposals (metrics only)
-        # --------------------------------------------
         plates = propose_plate_regions(
             vehicle.crop,
             policy=CALIBRATION_PLATE_POLICY,
@@ -73,17 +48,14 @@ def run_frame_pipeline(*, camera_id, frame_ts, frame, vehicles):
         log_plate_summary(camera_id, v_idx, len(plates))
         log_plate_candidates(camera_id, v_idx, plates)
 
-        # --------------------------------------------
-        # OCR gated flow
-        # --------------------------------------------
         for p_idx, plate in enumerate(plates):
             try:
                 # -------------------------
-                # Gate 1 — cheap reject
+                # Cheap gate
                 # -------------------------
                 if not cheap_plate_gate(plate):
                     logger.info(
-                        "[PLATE-GATE] reject | cam=%s vehicle=%d plate=%d reason=cheap_gate",
+                        "[PLATE-GATE] reject | cam=%s vehicle=%d plate=%d",
                         camera_id,
                         v_idx,
                         p_idx,
@@ -91,20 +63,7 @@ def run_frame_pipeline(*, camera_id, frame_ts, frame, vehicles):
                     continue
 
                 # -------------------------
-                # Debug dump (only passed plates)
-                # -------------------------
-                maybe_dump_plate_crop(
-                    cam_id=camera_id,
-                    frame_ts=frame_ts,
-                    vehicle_idx=v_idx,
-                    plate_idx=p_idx,
-                    vehicle_crop=vehicle.crop,
-                    plate_crop=plate["crop"],
-                    bbox=plate.get("bbox"),
-                )
-
-                # -------------------------
-                # Gate 2 — LIGHT OCR
+                # OCR
                 # -------------------------
                 ocr = run_ocr(plate["crop"], mode="light")
 
@@ -118,9 +77,10 @@ def run_frame_pipeline(*, camera_id, frame_ts, frame, vehicles):
                 )
 
                 # -------------------------
-                # Gate 3 — confidence decision
+                # Decision
                 # -------------------------
                 if ocr.confidence >= CONFIRMED_CONF_THRESHOLD:
+                    decision = "confirmed"
                     emit_event(
                         "plate.confirmed",
                         camera_id=camera_id,
@@ -129,9 +89,9 @@ def run_frame_pipeline(*, camera_id, frame_ts, frame, vehicles):
                         plate=ocr.text,
                         confidence=ocr.confidence,
                     )
-                    continue
 
-                if ocr.confidence >= CANDIDATE_CONF_THRESHOLD:
+                elif ocr.confidence >= CANDIDATE_CONF_THRESHOLD:
+                    decision = "candidate"
                     emit_event(
                         "plate.candidate",
                         camera_id=camera_id,
@@ -140,32 +100,29 @@ def run_frame_pipeline(*, camera_id, frame_ts, frame, vehicles):
                         plate=ocr.text,
                         confidence=ocr.confidence,
                     )
-                    continue
+                else:
+                    decision = "rejected"
 
                 # -------------------------
-                # Gate 4 — optional escalation
+                # Debug dump + metadata
                 # -------------------------
-                if ENABLE_HEAVY_OCR:
-                    heavy = run_ocr(plate["crop"], mode="heavy")
-
-                    logger.info(
-                        "[OCR-HEAVY] cam=%s vehicle=%d plate=%d text=%r conf=%.3f",
-                        camera_id,
-                        v_idx,
-                        p_idx,
-                        heavy.text,
-                        heavy.confidence,
-                    )
-
-                    if heavy.confidence >= CONFIRMED_CONF_THRESHOLD:
-                        emit_event(
-                            "plate.confirmed",
-                            camera_id=camera_id,
-                            vehicle_idx=v_idx,
-                            plate_idx=p_idx,
-                            plate=heavy.text,
-                            confidence=heavy.confidence,
-                        )
+                maybe_dump_plate_crop(
+                    cam_id=camera_id,
+                    frame_ts=frame_ts,
+                    vehicle_idx=v_idx,
+                    plate_idx=p_idx,
+                    vehicle_crop=vehicle.crop,
+                    plate_crop=plate["crop"],
+                    bbox=plate.get("bbox"),
+                    plate_metrics={
+                        "area_ratio": plate["area_ratio"],
+                        "aspect": plate["aspect"],
+                        "blur": plate["blur"],
+                        "skew": plate["skew"],
+                    },
+                    ocr_result=ocr,
+                    decision=decision,
+                )
 
             except Exception as e:
                 logger.exception(
@@ -176,7 +133,4 @@ def run_frame_pipeline(*, camera_id, frame_ts, frame, vehicles):
                     e,
                 )
 
-    return {
-        "vehicles": vehicles,
-        "plates": [],  # emitted via events only
-    }
+    return {"vehicles": vehicles, "plates": []}
