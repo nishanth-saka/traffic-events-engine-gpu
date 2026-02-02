@@ -82,7 +82,7 @@ def run_frame_pipeline(*, camera_id, frame_ts, frame, vehicles):
                 # Gate 1 — cheap reject
                 # -------------------------
                 if not cheap_plate_gate(plate):
-                    logger.debug(
+                    logger.info(
                         "[PLATE-GATE] reject | cam=%s vehicle=%d plate=%d reason=cheap_gate",
                         camera_id,
                         v_idx,

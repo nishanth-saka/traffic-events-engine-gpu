@@ -3,7 +3,6 @@
 from dataclasses import dataclass
 import cv2
 import pytesseract
-print("✅ Tesseract:", pytesseract.get_tesseract_version(), flush=True)
 import re
 
 
@@ -17,23 +16,35 @@ class OCRResult:
 def run_ocr(plate_img, *, mode: str = "light") -> OCRResult:
     """
     Lightweight local OCR using Tesseract.
-    No billing. No network. Calibration-friendly.
+    Step-3 preprocessing applied here.
     """
 
     if plate_img is None or plate_img.size == 0:
         return OCRResult("", 0.0, "tesseract")
 
-    # ----------------------------
-    # Preprocessing (very mild)
-    # ----------------------------
+    # ---------------------------------
+    # Preprocessing (Step 3)
+    # ---------------------------------
     gray = cv2.cvtColor(plate_img, cv2.COLOR_BGR2GRAY)
+
+    # upscale small SUB-stream plates
     gray = cv2.resize(
         gray, None, fx=2.0, fy=2.0, interpolation=cv2.INTER_CUBIC
     )
 
-    # ----------------------------
+    # 🔥 Step 3: adaptive thresholding
+    gray = cv2.adaptiveThreshold(
+        gray,
+        255,
+        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY,
+        31,
+        2,
+    )
+
+    # ---------------------------------
     # OCR
-    # ----------------------------
+    # ---------------------------------
     data = pytesseract.image_to_data(
         gray,
         output_type=pytesseract.Output.DICT,
