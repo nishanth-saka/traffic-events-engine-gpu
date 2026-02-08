@@ -1,4 +1,4 @@
-# app/ingest/frame/policy.py
+# TRAFFIC/app/ingest/frame/policy.py
 
 from dataclasses import dataclass
 
@@ -7,7 +7,6 @@ from dataclasses import dataclass
 class PlateProposalPolicy:
     """
     Geometry & quality constraints for plate proposals.
-    Tunable without touching algorithm code.
     """
 
     # Geometry
@@ -18,35 +17,26 @@ class PlateProposalPolicy:
     max_area_ratio: float = 0.20
 
     # Quality
-    min_blur: float = 60.0        # Laplacian variance
-    max_skew: float = 20.0        # degrees
+    min_blur: float = 60.0
+    max_skew: float = 20.0
 
-    # Size guardrails (absolute px)
+    # Size
     min_width: int = 60
     min_height: int = 20
 
 
-# 🔒 Default global policy (Gate-2)
 DEFAULT_PLATE_POLICY = PlateProposalPolicy()
 
 # -------------------------------------------------
-# Gate-2 CALIBRATION policy (SUB stream friendly)
-# Intentionally loose — metrics, not filtering
+# Calibration / SUB-stream friendly policy
 # -------------------------------------------------
-
 CALIBRATION_PLATE_POLICY = PlateProposalPolicy(
-    # Geometry — looser
     min_aspect=1.5,
     max_aspect=8.0,
-
     min_area_ratio=0.005,
     max_area_ratio=0.30,
-
-    # Size — SUB stream tolerant
     min_width=40,
     min_height=15,
-
-    # Quality (NOT enforced yet, metrics only)
     min_blur=0.0,
     max_skew=45.0,
 )
@@ -55,9 +45,11 @@ CALIBRATION_PLATE_POLICY = PlateProposalPolicy(
 # OCR gating thresholds
 # -------------------------------------------------
 
-CANDIDATE_CONF_THRESHOLD = 0.30
+# candidate now comes from TEMPORAL votes, not raw confidence
+CANDIDATE_CONF_THRESHOLD = 0.10   # effectively permissive
+
+# confirmed stays strict
 CONFIRMED_CONF_THRESHOLD = 0.75
 
-ENABLE_HEAVY_OCR = False   # flip later
-
-
+# heavy OCR still off (later step)
+ENABLE_HEAVY_OCR = False
