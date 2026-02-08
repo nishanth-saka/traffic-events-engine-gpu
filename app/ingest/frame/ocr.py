@@ -1,17 +1,16 @@
 # TRAFFIC/app/ingest/frame/ocr.py
 
 from dataclasses import dataclass
-import cv2
-import pytesseract
-import re
 import logging
+import re
+import cv2
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
-
-# -------------------------------
+# -------------------------------------------------
 # OCR Result model
-# -------------------------------
+# -------------------------------------------------
 @dataclass
 class OCRResult:
     text: str
@@ -19,9 +18,9 @@ class OCRResult:
     engine: str
 
 
-# -------------------------------
-# Normalization helpers
-# -------------------------------
+# -------------------------------------------------
+# Normalization helpers (lightweight)
+# -------------------------------------------------
 CHAR_NORMALIZE_MAP = {
     "O": "0",
     "I": "1",
@@ -33,101 +32,110 @@ CHAR_NORMALIZE_MAP = {
 
 
 def normalize_text(text: str) -> str:
-    """
-    Normalize common OCR confusions.
-    This is intentionally LIGHT — no regex enforcement here.
-    """
     return "".join(CHAR_NORMALIZE_MAP.get(c, c) for c in text.upper())
 
 
-# -------------------------------
-# OCR runner (Step-2: real OCR)
-# -------------------------------
+# -------------------------------------------------
+# PaddleOCR singleton
+# -------------------------------------------------
+_PADDLE_OCR = None
+
+
+def get_paddle_ocr():
+    global _PADDLE_OCR
+    if _PADDLE_OCR is not None:
+        return _PADDLE_OCR
+
+    try:
+        from paddleocr import PaddleOCR
+
+        logger.info("[OCR] Initializing PaddleOCR (GPU if available)")
+        _PADDLE_OCR = PaddleOCR(
+            use_angle_cls=False,
+            lang="en",
+            use_gpu=True,          # GPU if present
+            show_log=False,
+        )
+        return _PADDLE_OCR
+
+    except Exception as e:
+        logger.warning("[OCR] PaddleOCR init failed: %s", e)
+        _PADDLE_OCR = False
+        return None
+
+
+# -------------------------------------------------
+# OCR runner (GPU-first, CPU-safe)
+# -------------------------------------------------
 def run_ocr(plate_img, *, mode: str = "light") -> OCRResult:
     """
-    Lightweight local OCR using Tesseract.
-
-    Step-2 behavior:
-    - OCR ALWAYS returns text if anything is detected
-    - No hard rejection here
-    - Weak / partial / numeric strings are allowed
-    - Aggregation decides later
+    Step-4 OCR:
+    - PaddleOCR (GPU-first)
+    - No early rejection
+    - Always returns best-effort text
     """
 
     if plate_img is None or plate_img.size == 0:
-        logger.debug("[OCR] empty plate image")
-        return OCRResult("", 0.0, "tesseract")
+        return OCRResult("", 0.0, "none")
 
     # ---------------------------------
-    # Preprocessing
+    # Preprocessing (light, OCR-friendly)
     # ---------------------------------
     gray = cv2.cvtColor(plate_img, cv2.COLOR_BGR2GRAY)
 
-    # Upscale small SUB-stream plates
+    # Upscale aggressively — helps Paddle a LOT
     gray = cv2.resize(
-        gray, None, fx=2.0, fy=2.0, interpolation=cv2.INTER_CUBIC
+        gray, None, fx=2.5, fy=2.5, interpolation=cv2.INTER_CUBIC
     )
 
-    # Adaptive thresholding (robust for plates)
-    gray = cv2.adaptiveThreshold(
-        gray,
-        255,
-        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-        cv2.THRESH_BINARY,
-        31,
-        2,
-    )
+    # mild contrast normalization
+    gray = cv2.equalizeHist(gray)
+
+    # Paddle expects RGB
+    rgb = cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB)
 
     # ---------------------------------
-    # OCR (Tesseract)
+    # PaddleOCR
     # ---------------------------------
-    data = pytesseract.image_to_data(
-        gray,
-        output_type=pytesseract.Output.DICT,
-        config="--psm 7 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
-    )
+    ocr_engine = get_paddle_ocr()
+    if not ocr_engine:
+        return OCRResult("", 0.0, "paddle_unavailable")
+
+    try:
+        results = ocr_engine.ocr(rgb, cls=False)
+    except Exception as e:
+        logger.exception("[OCR] PaddleOCR failure: %s", e)
+        return OCRResult("", 0.0, "paddle_error")
 
     texts = []
     confs = []
 
-    for raw_txt, conf in zip(data["text"], data["conf"]):
-        if conf == "-1":
-            continue
-
-        raw_txt = raw_txt.strip()
-        if not raw_txt:
-            continue
-
-        clean = re.sub(r"[^A-Z0-9]", "", raw_txt.upper())
-        if not clean:
-            continue
-
-        normalized = normalize_text(clean)
-
-        texts.append(normalized)
+    for line in results or []:
         try:
+            text, conf = line[1]
+            clean = re.sub(r"[^A-Z0-9]", "", text.upper())
+            if not clean:
+                continue
+
+            normalized = normalize_text(clean)
+            texts.append(normalized)
             confs.append(float(conf))
         except Exception:
-            confs.append(0.0)
+            continue
 
-    # ---------------------------------
-    # Result assembly (NO rejection)
-    # ---------------------------------
     if not texts:
-        logger.debug("[OCR] no text detected")
-        return OCRResult("", 0.0, "tesseract")
+        return OCRResult("", 0.0, "paddle")
 
     text = "".join(texts)
 
-    # Average confidence, normalized to 0–1
     confidence = 0.0
     if confs:
-        confidence = sum(confs) / (len(confs) * 100.0)
+        confidence = sum(confs) / len(confs)
 
     logger.info(
-        "[OCR] engine=tesseract text='%s' conf=%.3f",
+        "[OCR] engine=paddle text=%r conf=%.3f",
         text,
         confidence,
     )
 
-    return OCRResult(text, confidence, "tesseract")
+    return OCRResult(text, confidence, "paddle")
